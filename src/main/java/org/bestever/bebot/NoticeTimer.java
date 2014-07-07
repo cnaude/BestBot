@@ -12,7 +12,6 @@
 // GNU General Public License for more details.
 //
 // --------------------------------------------------------------------------
-
 package org.bestever.bebot;
 
 import java.util.TimerTask;
@@ -22,24 +21,27 @@ import java.util.TimerTask;
  */
 public class NoticeTimer extends TimerTask {
 
-	/**
-	 * Holds the bot
-	 */
-	private Bot bot;
+    /**
+     * Holds the bot
+     */
+    private final Bot bot;
 
-	/**
-	 * Constructor
-	 * @param bot Bot - the main bot object
-	 */
-	public NoticeTimer(Bot bot) {
-		this.bot = bot;
-	}
+    /**
+     * Constructor
+     *
+     * @param bot
+     */
+    public NoticeTimer(Bot bot) {
+        this.bot = bot;
+    }
 
-	/**
-	 * Send a message to all servers
-	 */
-	public void run() {
-		for (Server s : bot.servers)
-			s.in.println("say " + bot.cfg_data.bot_notice);
-	}
+    /**
+     * Send a message to all servers
+     */
+    @Override
+    public void run() {
+        for (Server s : bot.servers) {
+            s.in.println("say " + bot.cfg_data.bot_notice);
+        }
+    }
 }

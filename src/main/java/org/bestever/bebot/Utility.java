@@ -31,10 +31,11 @@ public class Utility {
 	public static final int SHORT_MAX = 65536;
 
 	public static byte[] getByteArrayFromFile(String filePath) throws IOException {
-		RandomAccessFile f = new RandomAccessFile(filePath, "r");
-		byte[] wadData = new byte[(int)f.length()];
-		f.read(wadData);
-		f.close();
+            byte[] wadData;
+            try (RandomAccessFile f = new RandomAccessFile(filePath, "r")) {
+                wadData = new byte[(int)f.length()];
+                f.read(wadData);
+            }
 		return wadData;
 	}
 
