@@ -13,7 +13,7 @@
     <version>0.1-${build.number}</version>
     <name>BestBot</name>
     <description>A Zandrom IRC bot.</description>
-    <url>http://cnaude.org/ZurpleIRC</url>
+    <url>http://cnaude.org</url>
 
     <repositories>
         <repository>
@@ -98,6 +98,13 @@
             <artifactId>ini4j</artifactId>
             <version>0.5.2</version>
         </dependency>
+        
+        <dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+            <version>5.1.6</version>
+        </dependency>
+
 
     </dependencies>
 
@@ -109,7 +116,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.cnaude.zurpleirc.ZurpleIRC</mainClass>
+                            <mainClass>org.bestever.bebot.Bot</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
@@ -127,51 +134,18 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
-                <version>2.2</version>
+                <configuration>
+                    <createDependencyReducedPom>false</createDependencyReducedPom>
+                </configuration>
                 <executions>
                     <execution>
                         <phase>package</phase>
                         <goals>
                             <goal>shade</goal>
                         </goals>
-                        <configuration>
-                            <minimizeJar>true</minimizeJar>
-                            <artifactSet>
-                                <includes>
-                                    <include>org.pircbotx</include>
-                                    <include>org.slf4j</include>                                    
-                                    <include>org.apache.commons</include>
-                                    <include>jline</include>
-                                </includes>
-                            </artifactSet>
-                            <filters>
-                            </filters>
-                            <relocations>
-                                <relocation>
-                                    <pattern>org.pircbotx</pattern>
-                                    <shadedPattern>org.pircbotx</shadedPattern>
-                                </relocation>
-                                <relocation>
-                                    <pattern>org.slf4j</pattern>
-                                    <shadedPattern>org.slf4j</shadedPattern>
-                                </relocation>
-                                <relocation>
-                                    <pattern>org.slf4j.impl</pattern>
-                                    <shadedPattern>org.slf4j.impl</shadedPattern>
-                                </relocation>
-                                <relocation>
-                                    <pattern>org.apache.commons.lang3</pattern>
-                                    <shadedPattern>org.apache.commons.lang3</shadedPattern>
-                                </relocation>
-                                <relocation>
-                                    <pattern>jline</pattern>
-                                    <shadedPattern>jline</shadedPattern>
-                                </relocation>
-                            </relocations>
-                        </configuration>
                     </execution>
                 </executions>
-            </plugin>   
+            </plugin>
             <plugin>
                 <artifactId>maven-antrun-plugin</artifactId>
                 <executions>

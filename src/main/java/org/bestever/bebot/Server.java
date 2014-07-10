@@ -288,11 +288,11 @@ public class Server {
                             server.executableType = botReference.cfg_data.bot_executable_kpatch;
                             break;
                         case "developer":
-                            server.bot.sendMessage(server.bot.cfg_data.ircChannel, "Important: Developer repositories may be completely broken, will not run, or have many bugs. Use at your own risk! If it keeps crashing, it's probably the repository and there is nothing we can do to solve that.");
+                            server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "Important: Developer repositories may be completely broken, will not run, or have many bugs. Use at your own risk! If it keeps crashing, it's probably the repository and there is nothing we can do to solve that.");
                             server.executableType = botReference.cfg_data.bot_executable_developerrepository;
                             break;
                         default:
-                            server.bot.sendMessage(server.bot.cfg_data.ircChannel, "Invalid binary (" + m.group(2) + "); please use 'kpatch' or 'developer' to use custom binaries (ex: binary=kpatch), or remove it to use default Zandronum.");
+                            server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "Invalid binary (" + m.group(2) + "); please use 'kpatch' or 'developer' to use custom binaries (ex: binary=kpatch), or remove it to use default Zandronum.");
                             return;
                     }
                     break;
@@ -302,20 +302,20 @@ public class Server {
                 case "compatflags":
                     server.compatflags = handleGameFlags(m.group(2));
                     if (server.compatflags == FLAGS_ERROR) {
-                        server.bot.sendMessage(server.bot.cfg_data.ircChannel, "Problem with parsing compatflags");
+                        server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "Problem with parsing compatflags");
                         return;
                     }
                     break;
                 case "compatflags2":
                     server.compatflags2 = handleGameFlags(m.group(2));
                     if (server.compatflags == FLAGS_ERROR) {
-                        server.bot.sendMessage(server.bot.cfg_data.ircChannel, "Problem with parsing compatflags2");
+                        server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "Problem with parsing compatflags2");
                         return;
                     }
                     break;
                 case "config":
                     if (!server.checkConfig(server.bot.cfg_data.bot_cfg_directory_path + Functions.cleanInputFile(m.group(2).toLowerCase()))) {
-                        server.bot.sendMessage(server.bot.cfg_data.ircChannel, "Config file '" + m.group(2) + "' does not exist.");
+                        server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "Config file '" + m.group(2) + "' does not exist.");
                         return;
                     }
                     server.config = Functions.cleanInputFile(m.group(2).toLowerCase());
@@ -327,21 +327,21 @@ public class Server {
                 case "dmflags":
                     server.dmflags = handleGameFlags(m.group(2));
                     if (server.dmflags == FLAGS_ERROR) {
-                        server.bot.sendMessage(server.bot.cfg_data.ircChannel, "Problem with parsing dmflags");
+                        server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "Problem with parsing dmflags");
                         return;
                     }
                     break;
                 case "dmflags2":
                     server.dmflags2 = handleGameFlags(m.group(2));
                     if (server.dmflags2 == FLAGS_ERROR) {
-                        server.bot.sendMessage(server.bot.cfg_data.ircChannel, "Problem with parsing dmflags2");
+                        server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "Problem with parsing dmflags2");
                         return;
                     }
                     break;
                 case "dmflags3":
                     server.dmflags3 = handleGameFlags(m.group(2));
                     if (server.dmflags3 == FLAGS_ERROR) {
-                        server.bot.sendMessage(server.bot.cfg_data.ircChannel, "Problem with parsing dmflags3");
+                        server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "Problem with parsing dmflags3");
                         return;
                     }
                     break;
@@ -364,18 +364,18 @@ public class Server {
                     if (Functions.checkValidPort(m.group(2))) {
                         server.temp_port = Integer.valueOf(m.group(2));
                     } else {
-                        server.bot.sendMessage(server.bot.cfg_data.ircChannel, "You did not input a valid port.");
+                        server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "You did not input a valid port.");
                         return;
                     }
                     if (server.checkPortExists(botReference, server.temp_port)) {
-                        server.bot.sendMessage(server.bot.cfg_data.ircChannel, "Port " + server.temp_port + " is already in use.");
+                        server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "Port " + server.temp_port + " is already in use.");
                         return;
                     }
                     break;
                 case "skill":
                     server.skill = handleSkill(m.group(2));
                     if (server.skill == -1) {
-                        server.bot.sendMessage(server.bot.cfg_data.ircChannel, "Skill must be between 0-4");
+                        server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "Skill must be between 0-4");
                         return;
                     }
                     break;
@@ -397,14 +397,14 @@ public class Server {
                 if (server.wads.get(i).startsWith("iwad:")) {
                     String tempWad = server.wads.get(i).split(":")[1];
                     if (!Functions.fileExists(server.bot.cfg_data.bot_iwad_directory_path + tempWad)) {
-                        server.bot.sendMessage(server.bot.cfg_data.ircChannel, "File (iwad) '" + tempWad + "' does not exist!");
+                        server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "File (iwad) '" + tempWad + "' does not exist!");
                         return;
                     } // Replace iwad: since we don't need it
                     else {
                         server.wads.set(i, tempWad);
                     }
                 } else if (!Functions.fileExists(server.bot.cfg_data.bot_wad_directory_path + server.wads.get(i))) {
-                    server.bot.sendMessage(server.bot.cfg_data.ircChannel, "File '" + server.wads.get(i) + "' does not exist!");
+                    server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "File '" + server.wads.get(i) + "' does not exist!");
                     return;
                 }
             }
@@ -412,21 +412,21 @@ public class Server {
 
         // Now that we've indexed the string, check to see if we have what we need to start a server
         if (server.iwad == null) {
-            server.bot.sendMessage(server.bot.cfg_data.ircChannel, "You are missing an iwad, or have specified an incorrect iwad. You can add it by appending: iwad=your_iwad");
+            server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "You are missing an iwad, or have specified an incorrect iwad. You can add it by appending: iwad=your_iwad");
             return;
         }
         if (server.gamemode == null) {
-            server.bot.sendMessage(server.bot.cfg_data.ircChannel, "You are missing the gamemode, or have specified an incorrect gamemode. You can add it by appending: gamemode=your_gamemode");
+            server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "You are missing the gamemode, or have specified an incorrect gamemode. You can add it by appending: gamemode=your_gamemode");
             return;
         }
         if (server.servername == null) {
-            server.bot.sendMessage(server.bot.cfg_data.ircChannel, "You are missing the hostname, or your hostname syntax is wrong. You can add it by appending: hostname=\"Your Server Name\"");
+            server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "You are missing the hostname, or your hostname syntax is wrong. You can add it by appending: hostname=\"Your Server Name\"");
             return;
         }
 
         // Check if the global server limit has been reached
         if (Functions.getFirstAvailablePort(server.bot.getMinPort(), server.bot.getMaxPort()) == 0) {
-            server.bot.sendMessage(server.bot.cfg_data.ircChannel, "Global server limit has been reached.");
+            server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "Global server limit has been reached.");
             return;
         }
 
@@ -435,7 +435,7 @@ public class Server {
             server.server_id = Functions.generateHash();
         } catch (NoSuchAlgorithmException e) {
             logMessage(LOGLEVEL_CRITICAL, "Error generating MD5 hash!");
-            server.bot.sendMessage(server.bot.cfg_data.ircChannel, "Error generating MD5 hash. Please contact an administrator.");
+            server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "Error generating MD5 hash. Please contact an administrator.");
             return;
         }
 

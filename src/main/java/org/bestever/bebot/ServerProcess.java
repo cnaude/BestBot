@@ -255,7 +255,7 @@ public class ServerProcess extends Thread {
             // NOTE: As of now, BE users can still check the RCON password by accessing the control panel on the website.
             // We'll fix this later by changing the RCON from the unique_id to a random MD5 hash
             if (server.bot.cfg_data.bot_public_rcon || AccountType.isAccountTypeOf(server.user_level, AccountType.ADMIN, AccountType.MODERATOR, AccountType.RCON)) {
-                server.bot.sendMessage(server.sender, "Your unique server ID is: " + server.server_id + ". This is your RCON password, which can be used using 'send_password " + server.server_id + "' via the in-game console. You can view your logfile at http://static.best-ever.org/logs/" + server.server_id + ".txt");
+                server.bot.blockingIRCMessage(server.sender, "Your unique server ID is: " + server.server_id + ". This is your RCON password, which can be used using 'send_password " + server.server_id + "' via the in-game console. You can view your logfile at http://static.best-ever.org/logs/" + server.server_id + ".txt");
             }
 
             // Process server while it outputs text
@@ -268,7 +268,7 @@ public class ServerProcess extends Thread {
                     if (Functions.isNumeric(portNumber)) {
                         server.port = Integer.parseInt(portNumber);
                     } else {
-                        server.bot.sendMessage(server.irc_channel, "Warning: port parsing error when setting up server [1]; contact an administrator.");
+                        server.bot.blockingIRCMessage(server.irc_channel, "Warning: port parsing error when setting up server [1]; contact an administrator.");
                     }
 
                     // If the port is used [NETWORK_Construct: Couldn't bind to 10666. Binding to 10667 instead...]
@@ -278,7 +278,7 @@ public class ServerProcess extends Thread {
                     if (Functions.isNumeric(portNumber)) {
                         server.port = Integer.parseInt(portNumber);
                     } else {
-                        server.bot.sendMessage(server.irc_channel, "Warning: port parsing error when setting up server [2]; contact an administrator.");
+                        server.bot.blockingIRCMessage(server.irc_channel, "Warning: port parsing error when setting up server [2]; contact an administrator.");
                     }
                 }
 
@@ -286,8 +286,8 @@ public class ServerProcess extends Thread {
                 if (strLine.equalsIgnoreCase("UDP Initialized.")) {
                     System.out.println(strLine);
                     server.bot.servers.add(server);
-                    server.bot.sendMessage(server.irc_channel, "Server started successfully on port " + server.port + "!");
-                    server.bot.sendMessage(server.sender, "To kill your server, in the channel " + server.bot.cfg_data.ircChannel + ", type .killmine to kill all of your servers, or .kill " + server.port + " to kill just this one.");
+                    server.bot.blockingIRCMessage(server.irc_channel, "Server started successfully on port " + server.port + "!");
+                    server.bot.blockingIRCMessage(server.sender, "To kill your server, in the channel " + server.bot.cfg_data.ircChannel + ", type .killmine to kill all of your servers, or .kill " + server.port + " to kill just this one.");
                 }
 
                 // Check for banned players
@@ -328,9 +328,9 @@ public class ServerProcess extends Thread {
             // Notify the main channel if enabled
             if (!server.hide_stop_message) {
                 if (server.port != 0) {
-                    server.bot.sendMessage(server.irc_channel, "Server stopped on port " + server.port + "! Server ran for " + Functions.calculateTime(uptime));
+                    server.bot.blockingIRCMessage(server.irc_channel, "Server stopped on port " + server.port + "! Server ran for " + Functions.calculateTime(uptime));
                 } else {
-                    server.bot.sendMessage(server.irc_channel, "Server was not started. This is most likely due to a wad error.");
+                    server.bot.blockingIRCMessage(server.irc_channel, "Server was not started. This is most likely due to a wad error.");
                 }
             }
 
@@ -340,7 +340,7 @@ public class ServerProcess extends Thread {
             // Auto-restart the server if enabled, and only if successfully started
             if (server.auto_restart && server.port != 0) {
                 server.temp_port = server.port;
-                server.bot.sendMessage(server.bot.cfg_data.ircChannel, "Server crashed! Attempting to restart server...");
+                server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "Server crashed! Attempting to restart server...");
                 server.bot.processHost(server.user_level, server.bot.cfg_data.ircChannel, server.sender, server.irc_hostname, server.host_command, true, server.port);
             }
 

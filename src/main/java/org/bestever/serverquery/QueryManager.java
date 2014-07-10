@@ -40,11 +40,6 @@ public class QueryManager {
     private final LinkedBlockingQueue<ServerQueryRequest> queryRequests;
 
     /**
-     * Tells us if the thread is to be terminated or not
-     */
-    private boolean threadTerminate = false;
-
-    /**
      * Indicates if this thread is processing a query or not
      */
     private boolean processingQuery = false;
@@ -67,12 +62,11 @@ public class QueryManager {
         timer.schedule(new TimerTask() {
             @Override
             public void run() {
-                while (!threadTerminate) {
-                    // If we are not processing a request and we have a query, handle it
-                    if (!processingQuery && queryRequests.size() > 0) {
-                        processQuery();
-                    }
+                // If we are not processing a request and we have a query, handle it
+                if (!processingQuery && queryRequests.size() > 0) {
+                    processQuery();
                 }
+
             }
         }, 0, 1000);
     }
@@ -89,14 +83,6 @@ public class QueryManager {
             return false;
         }
         return queryRequests.add(query);
-    }
-
-    /**
-     * Prepares the thread to terminate, will probably finish any request it is
-     * in
-     */
-    public void kill() {
-        threadTerminate = true;
     }
 
     /**

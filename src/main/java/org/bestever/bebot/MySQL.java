@@ -188,9 +188,9 @@ public class MySQL {
         try (Connection con = getConnection(); PreparedStatement pst = con.prepareStatement(query)) {
             pst.setString(1, filename);
             if (pst.executeUpdate() <= 0) {
-                bot.sendMessage(sender, "Wad '" + filename + "' is not in the blacklist.");
+                bot.blockingIRCMessage(sender, "Wad '" + filename + "' is not in the blacklist.");
             } else {
-                bot.sendMessage(sender, "Removed '" + filename + "' from the blacklist.");
+                bot.blockingIRCMessage(sender, "Removed '" + filename + "' from the blacklist.");
             }
         } catch (SQLException e) {
             logMessage(LOGLEVEL_IMPORTANT, "Could not delete file from the blacklist. (SQL Error)");
@@ -211,7 +211,7 @@ public class MySQL {
             pst.setString(1, filename);
             ResultSet r = pst.executeQuery();
             if (r.next()) {
-                bot.sendMessage(sender, "Wad '" + filename + "' already exists in blacklist.");
+                bot.blockingIRCMessage(sender, "Wad '" + filename + "' already exists in blacklist.");
             } else {
                 query = "SELECT `md5`,`wadname` FROM `" + mysql_db + "`.`wads` WHERE `wadname` = ?";
                 pst = con.prepareStatement(query);
@@ -222,7 +222,7 @@ public class MySQL {
                     name = r.getString("wadname");
                     md5 = r.getString("md5");
                 } else {
-                    bot.sendMessage(sender, "Wad '" + filename + "' was not found in our repository.");
+                    bot.blockingIRCMessage(sender, "Wad '" + filename + "' was not found in our repository.");
                     return;
                 }
                 query = "INSERT INTO `" + mysql_db + "`.`blacklist` (`name`,`md5`) VALUES (?, ?)";
@@ -231,9 +231,9 @@ public class MySQL {
                 pst.setString(2, md5);
                 int result = pst.executeUpdate();
                 if (result == 1) {
-                    bot.sendMessage(sender, "Added '" + name + "' to the blacklist with hash " + md5);
+                    bot.blockingIRCMessage(sender, "Added '" + name + "' to the blacklist with hash " + md5);
                 } else {
-                    bot.sendMessage(sender, "There was an error adding the wad to the blacklist. Please contact an administrator.");
+                    bot.blockingIRCMessage(sender, "There was an error adding the wad to the blacklist. Please contact an administrator.");
                 }
             }
         } catch (SQLException e) {
@@ -272,7 +272,7 @@ public class MySQL {
                     blacklistedHashes.beforeFirst();
                     while (blacklistedHashes.next()) {
                         if (blacklistedHashes.getString("md5").equalsIgnoreCase(checkHashes.getString("md5"))) {
-                            bot.sendMessage(bot.cfg_data.ircChannel, "Wad " + checkHashes.getString("wadname")
+                            bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Wad " + checkHashes.getString("wadname")
                                     + " matches blacklist " + blacklistedHashes.getString("name") + " (hash: " + blacklistedHashes.getString("md5") + ")");
                             return false;
                         }
@@ -349,9 +349,9 @@ public class MySQL {
             pst.setString(2, reason);
             pst.setString(3, reason);
             if (pst.executeUpdate() == 1) {
-                bot.sendMessage(sender, "Added " + ip + " to banlist.");
+                bot.blockingIRCMessage(sender, "Added " + ip + " to banlist.");
             } else {
-                bot.sendMessage(sender, "That IP address is already banned!");
+                bot.blockingIRCMessage(sender, "That IP address is already banned!");
             }
         } catch (SQLException e) {
             
@@ -370,14 +370,14 @@ public class MySQL {
         try (Connection con = getConnection(); PreparedStatement pst = con.prepareStatement(query)) {
             pst.setString(1, ip);
             if (pst.executeUpdate() <= 0) {
-                bot.sendMessage(sender, "IP does not exist.");
+                bot.blockingIRCMessage(sender, "IP does not exist.");
             } else {
                 // Temporary list to avoid concurrent modification exception
                 List<Server> tempList = new LinkedList<>(bot.servers);
                 for (Server server : tempList) {
                     server.in.println("delban " + ip);
                 }
-                bot.sendMessage(sender, "Removed " + ip + " from banlist.");
+                bot.blockingIRCMessage(sender, "Removed " + ip + " from banlist.");
             }
         } catch (SQLException e) {
             
@@ -457,22 +457,22 @@ public class MySQL {
 
             // The username already exists!
             if (r.next()) {
-                bot.sendMessage(sender, "Account already exists!");
+                bot.blockingIRCMessage(sender, "Account already exists!");
             } else {
                 // Prepare, bind & execute
                 xs.setString(1, Functions.getUserName(hostname));
                 // Hash the PW with BCrypt
                 xs.setString(2, BCrypt.hashpw(password, BCrypt.gensalt(14)));
                 if (xs.executeUpdate() == 1) {
-                    bot.sendMessage(sender, "Account created! Your username is " + Functions.getUserName(hostname) + " and your password is " + password);
+                    bot.blockingIRCMessage(sender, "Account created! Your username is " + Functions.getUserName(hostname) + " and your password is " + password);
                 } else {
-                    bot.sendMessage(sender, "There was an error registering your account.");
+                    bot.blockingIRCMessage(sender, "There was an error registering your account.");
                 }
             }
         } catch (SQLException e) {
             logMessage(LOGLEVEL_IMPORTANT, "ERROR: SQL_ERROR in 'registerAccount()'");
             
-            bot.sendMessage(sender, "There was an error registering your account.");
+            bot.blockingIRCMessage(sender, "There was an error registering your account.");
         }
     }
 
@@ -498,22 +498,22 @@ public class MySQL {
 
             // The username doesn't exist!
             if (!r.next()) {
-                bot.sendMessage(sender, "Username does not exist.");
+                bot.blockingIRCMessage(sender, "Username does not exist.");
             } else {
                 // Prepare, bind & execute
                 xs.setString(1, BCrypt.hashpw(password, BCrypt.gensalt(14)));
                 xs.setString(2, r.getString("username"));
                 if (xs.executeUpdate() == 1) {
-                    bot.sendMessage(sender, "Successfully changed your password!");
+                    bot.blockingIRCMessage(sender, "Successfully changed your password!");
                 } else {
-                    bot.sendMessage(sender, "There was an error changing your password (executeUpdate error). Try again or contact an administrator with this message.");
+                    bot.blockingIRCMessage(sender, "There was an error changing your password (executeUpdate error). Try again or contact an administrator with this message.");
                 }
             }
         } catch (SQLException e) {
             System.out.println("ERROR: SQL_ERROR in 'changePassword()'");
             logMessage(LOGLEVEL_IMPORTANT, "SQL_ERROR in 'changePassword()'");
             
-            bot.sendMessage(sender, "There was an error changing your password account (thrown SQLException). Try again or contact an administrator with this message.");
+            bot.blockingIRCMessage(sender, "There was an error changing your password account (thrown SQLException). Try again or contact an administrator with this message.");
         }
     }
 
@@ -550,17 +550,17 @@ public class MySQL {
                             pst.setString(3, Functions.getUserName(hostname));
                             pst.executeUpdate();
                         }
-                        bot.sendMessage(bot.cfg_data.ircChannel, "Successfully updated save list.");
+                        bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Successfully updated save list.");
                     } catch (SQLException e) {
                         logMessage(LOGLEVEL_IMPORTANT, "SQL Error in 'saveSlot()'");
                         
                     }
                 } else {
-                    bot.sendMessage(bot.cfg_data.ircChannel, "You may only specify slot 1 to 10.");
+                    bot.blockingIRCMessage(bot.cfg_data.ircChannel, "You may only specify slot 1 to 10.");
                 }
             }
         } else {
-            bot.sendMessage(bot.cfg_data.ircChannel, "Incorrect syntax! Correct usage is .save 1-10 <host_message>");
+            bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Incorrect syntax! Correct usage is .save 1-10 <host_message>");
         }
     }
 
@@ -578,7 +578,7 @@ public class MySQL {
             if (Functions.isNumeric(words[1])) {
                 int slot = Integer.parseInt(words[1]);
                 if (slot > 10 || slot < 1) {
-                    bot.sendMessage(bot.cfg_data.ircChannel, "Slot must be between 1 and 10.");
+                    bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Slot must be between 1 and 10.");
                     return;
                 }
                 try (Connection con = getConnection()) {
@@ -591,7 +591,7 @@ public class MySQL {
                         String hostCommand = r.getString("serverstring");
                         bot.processHost(level, channel, sender, hostname, hostCommand, false, bot.getMinPort());
                     } else {
-                        bot.sendMessage(bot.cfg_data.ircChannel, "You do not have anything saved to that slot!");
+                        bot.blockingIRCMessage(bot.cfg_data.ircChannel, "You do not have anything saved to that slot!");
                     }
                 } catch (SQLException e) {
                     Logger.logMessage(LOGLEVEL_IMPORTANT, "SQL Error in 'loadSlot()'");
@@ -599,7 +599,7 @@ public class MySQL {
                 }
             }
         } else {
-            bot.sendMessage(bot.cfg_data.ircChannel, "Incorrect syntax! Correct syntax is .load 1 to 10");
+            bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Incorrect syntax! Correct syntax is .load 1 to 10");
         }
     }
 
@@ -641,22 +641,22 @@ public class MySQL {
                         pst.setString(2, Functions.getUserName(hostname));
                         ResultSet rs = pst.executeQuery();
                         if (rs.next()) {
-                            bot.sendMessage(bot.cfg_data.ircChannel, "In slot " + rs.getString("slot") + ": " + rs.getString("serverstring"));
+                            bot.blockingIRCMessage(bot.cfg_data.ircChannel, "In slot " + rs.getString("slot") + ": " + rs.getString("serverstring"));
                         } else {
-                            bot.sendMessage(bot.cfg_data.ircChannel, "You do not have anything saved to that slot!");
+                            bot.blockingIRCMessage(bot.cfg_data.ircChannel, "You do not have anything saved to that slot!");
                         }
                     } catch (SQLException e) {
                         Logger.logMessage(LOGLEVEL_IMPORTANT, "SQL Error in showSlot()");
                         
                     }
                 } else {
-                    bot.sendMessage(bot.cfg_data.ircChannel, "Slot must be between 1 and 10!");
+                    bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Slot must be between 1 and 10!");
                 }
             } else {
-                bot.sendMessage(bot.cfg_data.ircChannel, "Slot must be a number.");
+                bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Slot must be a number.");
             }
         } else {
-            bot.sendMessage(bot.cfg_data.ircChannel, "Incorrect syntax! Correct usage is .load <slot>");
+            bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Incorrect syntax! Correct usage is .load <slot>");
         }
     }
 

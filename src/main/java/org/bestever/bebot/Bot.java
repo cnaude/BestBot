@@ -15,7 +15,9 @@
 package org.bestever.bebot;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -23,6 +25,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Timer;
+import java.util.logging.Level;
+import jline.ConsoleReader;
 import static org.bestever.bebot.AccountType.ADMIN;
 import static org.bestever.bebot.AccountType.MODERATOR;
 import static org.bestever.bebot.AccountType.REGISTERED;
@@ -54,10 +58,18 @@ public class Bot extends ListenerAdapter {
      */
     private PircBotX bot;
 
+    private PircBotXThread pircBotThread;
+
     /**
      * Path to the configuration file relative to the bot
      */
     private String config_file;
+
+    /**
+     * IRC message queue
+     *
+     */
+    protected IRCMessageQueueWatcher ircMessageQueue;
 
     /**
      * The lowest port (the base port) that the bot uses. This should NEVER be
@@ -105,22 +117,32 @@ public class Bot extends ListenerAdapter {
     // Debugging purposes only
     public static Bot staticBot;
 
-    /**
-     * Set the bot up with the constructor
-     *
-     * @param cfgfile
-     */
-    public Bot(ConfigData cfgfile) {
+    private void buildAndStartIrcBot() {
         Configuration.Builder configBuilder = new Configuration.Builder()
                 .setName(cfg_data.ircName)
                 .setLogin(cfg_data.ircUser)
                 .setVersion(cfg_data.ircVersion)
                 .setServer(cfg_data.ircServer, cfg_data.ircPort, cfg_data.ircPass)
                 .addAutoJoinChannel(cfg_data.ircChannel)
-                .setAutoReconnect(true);
+                .setAutoReconnect(cfg_data.ircAutoReconnect)
+                .addListener(this);
 
+        Configuration configuration = configBuilder.buildConfiguration();
+        bot = new PircBotX(configuration);
+        pircBotThread = new PircBotXThread(bot);
+    }
+
+    /**
+     * Set the bot up with the constructor
+     *
+     * @param cfgfile
+     */
+    @SuppressWarnings("LeakingThisInConstructor")
+    public Bot(ConfigData cfgfile) {
         // Point our config data to what we created back in RunMe.java
         cfg_data = cfgfile;
+        buildAndStartIrcBot();
+        ircMessageQueue = new IRCMessageQueueWatcher(this);
 
         // Set up the logger
         Logger.setLogFile(cfg_data.bot_logfile);
@@ -134,6 +156,7 @@ public class Bot extends ListenerAdapter {
 
         // Set up the notice timer (if set)
         if (cfg_data.bot_notice != null) {
+            logMessage(LOGLEVEL_IMPORTANT, "Starting notice timer: " + cfg_data.bot_notice_interval);
             timer = new Timer();
             timer.scheduleAtFixedRate(new NoticeTimer(this), 1000, cfg_data.bot_notice_interval * 1000);
         }
@@ -184,20 +207,21 @@ public class Bot extends ListenerAdapter {
      * Adds a wad to the automatic server startup
      *
      * @param wad String - the name of the wad
+     * @param sender
      */
     public void addExtraWad(String wad, String sender) {
         if (!Functions.fileExists(cfg_data.bot_wad_directory_path + wad)) {
-            sendMessage(sender, "Cannot add " + wad + " as it does not exist.");
+            asyncIRCMessage(sender,"Cannot add " + wad + " as it does not exist.");
             return;
         }
         for (String listWad : cfg_data.bot_extra_wads) {
             if (listWad.equalsIgnoreCase(wad)) {
-                sendMessage(sender, "Cannot add " + listWad + " as it already exists in the wad startup list.");
+                asyncIRCMessage(sender,"Cannot add " + listWad + " as it already exists in the wad startup list.");
                 return;
             }
         }
         cfg_data.bot_extra_wads.add(wad);
-        sendMessage(sender, "Added " + wad + " to the wad startup list.");
+        asyncIRCMessage(sender,"Added " + wad + " to the wad startup list.");
     }
 
     /**
@@ -210,11 +234,11 @@ public class Bot extends ListenerAdapter {
         for (String listWad : cfg_data.bot_extra_wads) {
             if (listWad.equalsIgnoreCase(wad)) {
                 cfg_data.bot_extra_wads.remove(wad);
-                sendMessage(sender, "Wad " + wad + " was removed from the wad startup list.");
+                asyncIRCMessage(sender,"Wad " + wad + " was removed from the wad startup list.");
                 return;
             }
         }
-        sendMessage(sender, "Wad " + wad + " was not found in the wad startup list.");
+        asyncIRCMessage(sender,"Wad " + wad + " was not found in the wad startup list.");
     }
 
     /**
@@ -295,7 +319,7 @@ public class Bot extends ListenerAdapter {
         logMessage(LOGLEVEL_NORMAL, "Killing server on port " + portString + ".");
         // Ensure it is a valid port
         if (!Functions.isNumeric(portString)) {
-            sendMessage(cfg_data.ircChannel, "Invalid port number (" + portString + "), not terminating server.");
+            sendMessageToChannel("Invalid port number (" + portString + "), not terminating server.");
             return;
         }
 
@@ -304,7 +328,7 @@ public class Bot extends ListenerAdapter {
 
         // Handle users sending in a small value (thus saving time
         if (port < min_port) {
-            sendMessage(cfg_data.ircChannel, "Invalid port number (ports start at " + min_port + "), not terminating server.");
+            sendMessageToChannel("Invalid port number (ports start at " + min_port + "), not terminating server.");
             return;
         }
 
@@ -314,7 +338,7 @@ public class Bot extends ListenerAdapter {
             targetServer.auto_restart = false;
             targetServer.killServer();
         } else {
-            sendMessage(cfg_data.ircChannel, "Could not find a server with the port " + port + "!");
+            sendMessageToChannel("Could not find a server with the port " + port + "!");
         }
     }
 
@@ -331,17 +355,17 @@ public class Bot extends ListenerAdapter {
                     Server s = getServer(Integer.parseInt(keywords[1]));
                     if (s.auto_restart) {
                         s.auto_restart = false;
-                        sendMessage(cfg_data.ircChannel, "Autorestart disabled on server.");
+                        sendMessageToChannel("Autorestart disabled on server.");
                     } else {
                         s.auto_restart = true;
-                        sendMessage(cfg_data.ircChannel, "Autorestart set up on server.");
+                        sendMessageToChannel("Autorestart set up on server.");
                     }
                 }
             } else {
-                sendMessage(cfg_data.ircChannel, "Correct usage is .autorestart <port>");
+                sendMessageToChannel("Correct usage is .autorestart <port>");
             }
         } else {
-            sendMessage(cfg_data.ircChannel, "You do not have permission to use this command.");
+            sendMessageToChannel("You do not have permission to use this command.");
         }
     }
 
@@ -359,17 +383,17 @@ public class Bot extends ListenerAdapter {
                     Server s = getServer(Integer.parseInt(keywords[1]));
                     if (s.protected_server) {
                         s.protected_server = false;
-                        sendMessage(cfg_data.ircChannel, "Kill protection disabled.");
+                        sendMessageToChannel("Kill protection disabled.");
                     } else {
                         s.protected_server = true;
-                        sendMessage(cfg_data.ircChannel, "Kill protection enabled.");
+                        sendMessageToChannel("Kill protection enabled.");
                     }
                 }
             } else {
-                sendMessage(cfg_data.ircChannel, "Correct usage is .protect <port>");
+                sendMessageToChannel("Correct usage is .protect <port>");
             }
         } else {
-            sendMessage(cfg_data.ircChannel, "You do not have permission to use this command.");
+            sendMessageToChannel("You do not have permission to use this command.");
         }
     }
 
@@ -387,13 +411,13 @@ public class Bot extends ListenerAdapter {
                     for (Server s : servers) {
                         s.in.println("say \\cf--------------\\cc; say GLOBAL ANNOUNCEMENT: " + Functions.escapeQuotes(message) + "; say \\cf--------------\\cc;");
                     }
-                    sendMessage(cfg_data.ircChannel, "Global broadcast sent.");
+                    sendMessageToChannel("Global broadcast sent.");
                 } else {
-                    sendMessage(cfg_data.ircChannel, "There are no servers running at the moment.");
+                    sendMessageToChannel("There are no servers running at the moment.");
                 }
             }
         } else {
-            sendMessage(cfg_data.ircChannel, "You do not have the required privileges to send a broadcast.");
+            sendMessageToChannel("You do not have the required privileges to send a broadcast.");
         }
     }
 
@@ -418,18 +442,18 @@ public class Bot extends ListenerAdapter {
                             if (keywords[2].equalsIgnoreCase("sv_rconpassword") && keywords.length > 2) {
                                 s.rcon_password = keywords[3];
                             }
-                            sendMessage(recipient, "Command successfully sent.");
+                            blockingIRCMessage(recipient, "Command successfully sent.");
                         } else {
-                            sendMessage(recipient, "You do not own this server.");
+                            blockingIRCMessage(recipient, "You do not own this server.");
                         }
                     } else {
-                        sendMessage(recipient, "Server does not exist.");
+                        blockingIRCMessage(recipient, "Server does not exist.");
                     }
                 } else {
-                    sendMessage(recipient, "Port must be a number!");
+                    blockingIRCMessage(recipient, "Port must be a number!");
                 }
             } else {
-                sendMessage(recipient, "Incorrect syntax! Correct syntax is .send <port> <command>");
+                blockingIRCMessage(recipient, "Incorrect syntax! Correct syntax is .send <port> <command>");
             }
         }
     }
@@ -453,14 +477,14 @@ public class Bot extends ListenerAdapter {
             // Use soon!
             // String username = Functions.getUserName(hostname);
             // Support custom hostnames
-            if (!Functions.checkLoggedIn(hostname)) {
-                if (!MySQL.getUsername(hostname).equals("None")) {
-                    hostname = MySQL.getUsername(hostname);
-                }
-            }
-
+            //if (!Functions.checkLoggedIn(hostname)) {
+            //    if (!MySQL.getUsername(hostname).equals("None")) {
+            //        hostname = MySQL.getUsername(hostname);
+            //    }
+            //}
             // Perform function based on input (note: login is handled by the MySQL function/class); also mostly in alphabetical order for convenience
-            int userLevel = MySQL.getLevel(hostname);
+            //int userLevel = MySQL.getLevel(hostname);
+            int userLevel = ADMIN;
             switch (keywords[0].toLowerCase()) {
                 case ".autorestart":
                     toggleAutoRestart(userLevel, keywords);
@@ -469,10 +493,10 @@ public class Bot extends ListenerAdapter {
                     globalBroadcast(userLevel, keywords);
                     break;
                 case ".commands":
-                    sendMessage(cfg_data.ircChannel, "Allowed commands: " + processCommands(userLevel));
+                    sendMessageToChannel("Allowed commands: " + processCommands(userLevel));
                     break;
                 case ".cpu":
-                    sendMessage(cfg_data.ircChannel, String.valueOf(ManagementFactory.getOperatingSystemMXBean().getSystemLoadAverage()));
+                    sendMessageToChannel(String.valueOf(ManagementFactory.getOperatingSystemMXBean().getSystemLoadAverage()));
                     break;
                 case ".disconnect":
                     if (isAccountTypeOf(userLevel, ADMIN)) {
@@ -486,10 +510,10 @@ public class Bot extends ListenerAdapter {
                     processGet(userLevel, keywords);
                     break;
                 case ".help":
-                    if (cfg_data.bot_help != null) {
-                        sendMessage(cfg_data.ircChannel, cfg_data.bot_help);
+                    if (cfg_data.bot_help.isEmpty()) {
+                        sendMessageToChannel("There is no helpfile.");
                     } else {
-                        sendMessage(cfg_data.ircChannel, "There is no helpfile.");
+                        sendMessageToChannel(cfg_data.bot_help);
                     }
                     break;
                 case ".host":
@@ -508,7 +532,7 @@ public class Bot extends ListenerAdapter {
                     processKillInactive(userLevel, keywords);
                     break;
                 case ".liststartwads":
-                    sendMessage(cfg_data.ircChannel, "These wads are automatically loaded when a server is started: " + Functions.implode(cfg_data.bot_extra_wads, ", "));
+                    sendMessageToChannel("These wads are automatically loaded when a server is started: " + Functions.implode(cfg_data.bot_extra_wads, ", "));
                     break;
                 case ".load":
                     MySQL.loadSlot(hostname, keywords, userLevel, channel, sender);
@@ -536,13 +560,13 @@ public class Bot extends ListenerAdapter {
                     break;
                 case ".rcon":
                     if (isAccountTypeOf(userLevel, ADMIN, MODERATOR, REGISTERED)) {
-                        sendMessage(cfg_data.ircChannel, "Please PM the bot for the rcon.");
+                        sendMessageToChannel("Please PM the bot for the rcon.");
                     }
                     break;
                 case ".reloadconfig":
                     if (isAccountTypeOf(userLevel, ADMIN)) {
                         reloadConfigFile();
-                        sendMessage(cfg_data.ircChannel, "Configuration file has been successfully reloaded.");
+                        sendMessageToChannel("Configuration file has been successfully reloaded.");
                     }
                     break;
                 case ".save":
@@ -561,13 +585,13 @@ public class Bot extends ListenerAdapter {
                     break;
                 case ".uptime":
                     if (keywords.length == 1) {
-                        sendMessage(cfg_data.ircChannel, "I have been running for " + Functions.calculateTime(System.currentTimeMillis() - time_started));
+                        sendMessageToChannel("I have been running for " + Functions.calculateTime(System.currentTimeMillis() - time_started));
                     } else {
                         calculateUptime(keywords[1]);
                     }
                     break;
                 case ".whoami":
-                    sendMessage(cfg_data.ircChannel, getLoggedIn(hostname, userLevel));
+                    sendMessageToChannel(getLoggedIn(hostname, userLevel));
                     break;
                 default:
                     break;
@@ -585,16 +609,16 @@ public class Bot extends ListenerAdapter {
             int portValue = Integer.valueOf(port);
             Server s = getServer(portValue);
             if (s != null) {
-                if (portValue >= this.min_port && portValue < this.max_port) {
-                    sendMessage(cfg_data.ircChannel, s.port + " has been running for " + Functions.calculateTime(System.currentTimeMillis() - s.time_started));
+                if (portValue >= Bot.min_port && portValue < Bot.max_port) {
+                    sendMessageToChannel(s.port + " has been running for " + Functions.calculateTime(System.currentTimeMillis() - s.time_started));
                 } else {
-                    sendMessage(cfg_data.ircChannel, "Port must be between " + this.min_port + " and " + this.max_port);
+                    sendMessageToChannel("Port must be between " + Bot.min_port + " and " + Bot.max_port);
                 }
             } else {
-                sendMessage(cfg_data.ircChannel, "There is no server running on port " + port);
+                sendMessageToChannel("There is no server running on port " + port);
             }
         } else {
-            sendMessage(cfg_data.ircChannel, "Port must be a number (ex: .uptime 15000)");
+            sendMessageToChannel("Port must be a number (ex: .uptime 15000)");
         }
     }
 
@@ -606,14 +630,14 @@ public class Bot extends ListenerAdapter {
      */
     public void setNotice(String[] keywords, int userLevel) {
         if (keywords.length == 1) {
-            sendMessage(cfg_data.ircChannel, "Notice is: " + cfg_data.bot_notice);
+            sendMessageToChannel("Notice is: " + cfg_data.bot_notice);
             return;
         }
         if (isAccountTypeOf(userLevel, ADMIN, MODERATOR)) {
             cfg_data.bot_notice = Functions.implode(Arrays.copyOfRange(keywords, 1, keywords.length), " ");
-            sendMessage(cfg_data.ircChannel, "New notice has been set.");
+            sendMessageToChannel("New notice has been set.");
         } else {
-            sendMessage(cfg_data.ircChannel, "You do not have permission to set the notice.");
+            sendMessageToChannel("You do not have permission to set the notice.");
         }
     }
 
@@ -627,7 +651,7 @@ public class Bot extends ListenerAdapter {
         for (Server s : tempList) {
             s.in.println("delban " + ip);
         }
-        sendMessage(cfg_data.ircChannel, "Purged " + ip + " from all banlists.");
+        sendMessageToChannel("Purged " + ip + " from all banlists.");
     }
 
     /**
@@ -675,10 +699,10 @@ public class Bot extends ListenerAdapter {
      */
     private void messageChannel(String[] keywords, String sender) {
         if (keywords.length < 2) {
-            sendMessage(sender, "Incorrect syntax! Correct usage is .msg your_message");
+            asyncIRCMessage(sender,"Incorrect syntax! Correct usage is .msg your_message");
         } else {
             String message = Functions.implode(Arrays.copyOfRange(keywords, 1, keywords.length), " ");
-            sendMessage(cfg_data.ircChannel, message);
+            sendMessageToChannel(message);
         }
     }
 
@@ -694,12 +718,12 @@ public class Bot extends ListenerAdapter {
         if (keywords.length == 2) {
             File file = new File(cfg_data.bot_wad_directory_path + Functions.cleanInputFile(keywords[1].toLowerCase()));
             if (file.exists()) {
-                sendMessage(channel, "File '" + keywords[1].toLowerCase() + "' exists on the server.");
+                blockingIRCMessage(channel, "File '" + keywords[1].toLowerCase() + "' exists on the server.");
             } else {
-                sendMessage(channel, "Not found!");
+                blockingIRCMessage(channel, "Not found!");
             }
         } else {
-            sendMessage(channel, "Incorrect syntax, use: .file <filename.wad>");
+            blockingIRCMessage(channel, "Incorrect syntax, use: .file <filename.wad>");
         }
     }
 
@@ -713,19 +737,19 @@ public class Bot extends ListenerAdapter {
         logMessage(LOGLEVEL_TRIVIAL, "Displaying processGet().");
         if (isAccountTypeOf(userLevel, ADMIN, MODERATOR, REGISTERED)) {
             if (keywords.length != 3) {
-                sendMessage(cfg_data.ircChannel, "Proper syntax: .get <port> <property>");
+                sendMessageToChannel("Proper syntax: .get <port> <property>");
                 return;
             }
             if (!Functions.isNumeric(keywords[1])) {
-                sendMessage(cfg_data.ircChannel, "Port is not a valid number");
+                sendMessageToChannel("Port is not a valid number");
                 return;
             }
             Server tempServer = getServer(Integer.parseInt(keywords[1]));
             if (tempServer == null) {
-                sendMessage(cfg_data.ircChannel, "There is no server running on this port.");
+                sendMessageToChannel("There is no server running on this port.");
                 return;
             }
-            sendMessage(cfg_data.ircChannel, tempServer.getField(keywords[2]));
+            sendMessageToChannel(tempServer.getField(keywords[2]));
         }
     }
 
@@ -734,8 +758,11 @@ public class Bot extends ListenerAdapter {
      *
      * @param userLevel The user's bitmask level
      * @param channel IRC data associated with the sender
-     * @param hostname IRC data associated with the sender
+     * @param sender * @param hostname IRC data associated with the sender
+     * @param hostname
      * @param message The entire message to be processed
+     * @param autoRestart
+     * @param port
      */
     public void processHost(int userLevel, String channel, String sender, String hostname, String message, boolean autoRestart, int port) {
         logMessage(LOGLEVEL_NORMAL, "Processing the host command for " + Functions.getUserName(hostname) + " with the message \"" + message + "\".");
@@ -751,13 +778,13 @@ public class Bot extends ListenerAdapter {
                 if (slots > userServers) {
                     Server.handleHostCommand(this, servers, channel, sender, hostname, message, userLevel, autoRestart, port);
                 } else {
-                    sendMessage(cfg_data.ircChannel, "You have reached your server limit (" + slots + ")");
+                    sendMessageToChannel("You have reached your server limit (" + slots + ")");
                 }
             } else {
-                sendMessage(cfg_data.ircChannel, "You must register with BestEver and be logged in to IRC to use the bot to host!");
+                sendMessageToChannel("You must register with BestEver and be logged in to IRC to use the bot to host!");
             }
         } else {
-            sendMessage(cfg_data.ircChannel, "The bot is currently disabled from hosting for the time being. Sorry for any inconvenience!");
+            sendMessageToChannel("The bot is currently disabled from hosting for the time being. Sorry for any inconvenience!");
         }
     }
 
@@ -772,19 +799,19 @@ public class Bot extends ListenerAdapter {
         logMessage(LOGLEVEL_NORMAL, "Processing kill.");
         // Ensure proper syntax
         if (keywords.length != 2) {
-            sendMessage(cfg_data.ircChannel, "Proper syntax: .kill <port>");
+            sendMessageToChannel("Proper syntax: .kill <port>");
             return;
         }
 
         // Safety net
         if (servers == null) {
-            sendMessage(cfg_data.ircChannel, "Critical error: Linkedlist is null, contact an administrator.");
+            sendMessageToChannel("Critical error: Linkedlist is null, contact an administrator.");
             return;
         }
 
         // If server list is empty
         if (servers.isEmpty()) {
-            sendMessage(cfg_data.ircChannel, "There are currently no servers running!");
+            sendMessageToChannel("There are currently no servers running!");
             return;
         }
 
@@ -798,16 +825,16 @@ public class Bot extends ListenerAdapter {
                             server.auto_restart = false;
                             server.serverprocess.terminateServer();
                         } else {
-                            sendMessage(cfg_data.ircChannel, "Error: Server process is null, contact an administrator.");
+                            sendMessageToChannel("Error: Server process is null, contact an administrator.");
                         }
                     } else {
-                        sendMessage(cfg_data.ircChannel, "Error: You do not own this server!");
+                        sendMessageToChannel("Error: You do not own this server!");
                     }
                 } else {
-                    sendMessage(cfg_data.ircChannel, "Error: There is no server running on this port.");
+                    sendMessageToChannel("Error: There is no server running on this port.");
                 }
             } else {
-                sendMessage(cfg_data.ircChannel, "Improper port number.");
+                sendMessageToChannel("Improper port number.");
             }
             // Admins/mods can kill anything
         } else if (isAccountTypeOf(userLevel, ADMIN, MODERATOR)) {
@@ -834,12 +861,12 @@ public class Bot extends ListenerAdapter {
                     s.auto_restart = false;
                     s.killServer();
                 }
-                sendMessage(cfg_data.ircChannel, Functions.pluralize("Killed a total of " + serverCount + " server{s}.", serverCount));
+                sendMessageToChannel(Functions.pluralize("Killed a total of " + serverCount + " server{s}.", serverCount));
             } else {
-                sendMessage(cfg_data.ircChannel, "There are no servers running.");
+                sendMessageToChannel("There are no servers running.");
             }
         } else {
-            sendMessage(cfg_data.ircChannel, "You do not have permission to use this command.");
+            sendMessageToChannel("You do not have permission to use this command.");
         }
     }
 
@@ -853,22 +880,22 @@ public class Bot extends ListenerAdapter {
     private void processKillMine(int userLevel, String hostname) {
         logMessage(LOGLEVEL_TRIVIAL, "Processing killmine.");
         if (isAccountTypeOf(userLevel, ADMIN, MODERATOR, REGISTERED)) {
-            List<Server> servers = getUserServers(Functions.getUserName(hostname));
-            if (servers != null) {
+            List<Server> serverList = getUserServers(Functions.getUserName(hostname));
+            if (serverList != null) {
                 ArrayList<String> ports = new ArrayList<>();
-                for (Server s : servers) {
+                for (Server s : serverList) {
                     s.auto_restart = false;
                     s.hide_stop_message = true;
                     s.killServer();
                     ports.add(String.valueOf(s.port));
                 }
                 if (ports.size() > 0) {
-                    sendMessage(cfg_data.ircChannel, Functions.pluralize("Killed " + ports.size() + " server{s} (" + Functions.implode(ports, ", ") + ")", ports.size()));
+                    sendMessageToChannel(Functions.pluralize("Killed " + ports.size() + " server{s} (" + Functions.implode(ports, ", ") + ")", ports.size()));
                 } else {
-                    sendMessage(cfg_data.ircChannel, "You do not have any servers running.");
+                    sendMessageToChannel("You do not have any servers running.");
                 }
             } else {
-                sendMessage(cfg_data.ircChannel, "There are no servers running.");
+                sendMessageToChannel("There are no servers running.");
             }
         }
     }
@@ -884,7 +911,7 @@ public class Bot extends ListenerAdapter {
         logMessage(LOGLEVEL_NORMAL, "Processing a kill of inactive servers.");
         if (isAccountTypeOf(userLevel, ADMIN, MODERATOR)) {
             if (keywords.length < 2) {
-                sendMessage(cfg_data.ircChannel, "Proper syntax: .killinactive <days since> (ex: use .killinactive 3 to kill servers that haven't seen anyone for 3 days)");
+                sendMessageToChannel("Proper syntax: .killinactive <days since> (ex: use .killinactive 3 to kill servers that haven't seen anyone for 3 days)");
                 return;
             }
             if (Functions.isNumeric(keywords[1])) {
@@ -892,10 +919,10 @@ public class Bot extends ListenerAdapter {
                 int numOfDays = Integer.parseInt(keywords[1]);
                 if (numOfDays > 0) {
                     if (servers == null || servers.isEmpty()) {
-                        sendMessage(cfg_data.ircChannel, "No servers to kill.");
+                        sendMessageToChannel("No servers to kill.");
                         return;
                     }
-                    sendMessage(cfg_data.ircChannel, "Killing servers with " + numOfDays + "+ days of inactivity.");
+                    sendMessageToChannel("Killing servers with " + numOfDays + "+ days of inactivity.");
                     // Temporary list to avoid concurrent modification exception
                     List<Server> tempList = new LinkedList<>(servers);
                     for (Server s : tempList) {
@@ -908,16 +935,16 @@ public class Bot extends ListenerAdapter {
                             }
                         }
                     }
-                    if (ports.size() == 0) {
-                        sendMessage(cfg_data.ircChannel, "No servers were killed.");
+                    if (ports.isEmpty()) {
+                        sendMessageToChannel("No servers were killed.");
                     } else {
-                        sendMessage(cfg_data.ircChannel, Functions.pluralize("Killed " + ports.size() + " server{s} (" + Functions.implode(ports, ", ") + ")", ports.size()));
+                        sendMessageToChannel(Functions.pluralize("Killed " + ports.size() + " server{s} (" + Functions.implode(ports, ", ") + ")", ports.size()));
                     }
                 } else {
-                    sendMessage(cfg_data.ircChannel, "Using zero or less for .killinactive is not allowed.");
+                    sendMessageToChannel("Using zero or less for .killinactive is not allowed.");
                 }
             } else {
-                sendMessage(cfg_data.ircChannel, "Unexpected parameter for method.");
+                sendMessageToChannel("Unexpected parameter for method.");
             }
         }
     }
@@ -932,7 +959,7 @@ public class Bot extends ListenerAdapter {
         if (botEnabled) {
             if (isAccountTypeOf(userLevel, ADMIN)) {
                 botEnabled = false;
-                sendMessage(cfg_data.ircChannel, "Bot disabled.");
+                sendMessageToChannel("Bot disabled.");
             }
         }
     }
@@ -947,7 +974,7 @@ public class Bot extends ListenerAdapter {
         if (!botEnabled) {
             if (isAccountTypeOf(userLevel, ADMIN)) {
                 botEnabled = true;
-                sendMessage(cfg_data.ircChannel, "Bot enabled.");
+                sendMessageToChannel("Bot enabled.");
             }
         }
     }
@@ -964,15 +991,15 @@ public class Bot extends ListenerAdapter {
             if (Functions.isNumeric(keywords[1])) {
                 Server s = getServer(Integer.parseInt(keywords[1]));
                 if (s != null) {
-                    sendMessage(cfg_data.ircChannel, "The owner of port " + keywords[1] + " is: " + s.sender + "[" + Functions.getUserName(s.irc_hostname) + "].");
+                    sendMessageToChannel("The owner of port " + keywords[1] + " is: " + s.sender + "[" + Functions.getUserName(s.irc_hostname) + "].");
                 } else {
-                    sendMessage(cfg_data.ircChannel, "There is no server running on " + keywords[1] + ".");
+                    sendMessageToChannel("There is no server running on " + keywords[1] + ".");
                 }
             } else {
-                sendMessage(cfg_data.ircChannel, "Invalid port number.");
+                sendMessageToChannel("Invalid port number.");
             }
         } else {
-            sendMessage(cfg_data.ircChannel, "Improper syntax, use: .owner <port>");
+            sendMessageToChannel("Improper syntax, use: .owner <port>");
         }
     }
 
@@ -992,8 +1019,12 @@ public class Bot extends ListenerAdapter {
                         if (port > 0 && port < 65535) {
                             sendMessageToChannel("Attempting to query " + keywords[1] + ", please wait...");
                             ServerQueryRequest request = new ServerQueryRequest(ipFragment[0], port);
-                            if (!queryManager.addRequest(request)) {
-                                sendMessageToChannel("Too many people requesting queries. Please try again later.");
+                            if (queryManager != null) {
+                                if (!queryManager.addRequest(request)) {
+                                    sendMessageToChannel("Too many people requesting queries. Please try again later.");
+                                }
+                            } else {
+                                sendMessageToChannel("Query manager is stopped!");
                             }
                         } else {
                             sendMessageToChannel("Port value is not between 0 - 65536 (ends exclusive), please fix your IP:port and try again.");
@@ -1027,20 +1058,20 @@ public class Bot extends ListenerAdapter {
                     Server s = getServer(port);
                     if (s != null) {
                         if (Functions.getUserName(s.irc_hostname).equals(Functions.getUserName(hostname)) || isAccountTypeOf(userLevel, MODERATOR, ADMIN)) {
-                            sendMessage(sender, "RCON: " + s.rcon_password);
-                            sendMessage(sender, "ID: " + s.server_id);
-                            sendMessage(sender, "LOG: http://static.best-ever.org/logs/" + s.server_id + ".txt");
+                            asyncIRCMessage(sender,"RCON: " + s.rcon_password);
+                            asyncIRCMessage(sender,"ID: " + s.server_id);
+                            asyncIRCMessage(sender,"LOG: http://static.best-ever.org/logs/" + s.server_id + ".txt");
                         } else {
-                            sendMessage(sender, "You do not own this server.");
+                            asyncIRCMessage(sender,"You do not own this server.");
                         }
                     } else {
-                        sendMessage(sender, "Server does not exist.");
+                        asyncIRCMessage(sender,"Server does not exist.");
                     }
                 } else {
-                    sendMessage(sender, "Port must be a number!");
+                    asyncIRCMessage(sender,"Port must be a number!");
                 }
             } else {
-                sendMessage(sender, "Incorrect syntax! Correct syntax is .rcon <port>");
+                asyncIRCMessage(sender,"Incorrect syntax! Correct syntax is .rcon <port>");
             }
         }
     }
@@ -1065,19 +1096,19 @@ public class Bot extends ListenerAdapter {
     private void processServers(String[] keywords) {
         logMessage(LOGLEVEL_NORMAL, "Getting a list of servers.");
         if (keywords.length == 2) {
-            List<Server> servers = getUserServers(Functions.getUserName(keywords[1]));
-            if (servers != null && servers.size() > 0) {
-                for (Server server : servers) {
-                    sendMessage(cfg_data.ircChannel, server.port + ": " + server.servername + ((server.wads != null)
+            List<Server> serverList = getUserServers(Functions.getUserName(keywords[1]));
+            if (serverList != null && serverList.size() > 0) {
+                for (Server server : serverList) {
+                    sendMessageToChannel(server.port + ": " + server.servername + ((server.wads != null)
                             ? " with wads " + Functions.implode(server.wads, ", ") : ""));
                 }
             } else {
-                sendMessage(cfg_data.ircChannel, "User " + Functions.getUserName(keywords[1]) + " has no servers running.");
+                sendMessageToChannel("User " + Functions.getUserName(keywords[1]) + " has no servers running.");
             }
         } else if (keywords.length == 1) {
-            sendMessage(cfg_data.ircChannel, Functions.pluralize("There are " + servers.size() + " server{s}.", servers.size()));
+            sendMessageToChannel(Functions.pluralize("There are " + servers.size() + " server{s}.", servers.size()));
         } else {
-            sendMessage(cfg_data.ircChannel, "Incorrect syntax! Correct usage is .servers or .servers <username>");
+            sendMessageToChannel("Incorrect syntax! Correct usage is .servers or .servers <username>");
         }
     }
 
@@ -1128,7 +1159,7 @@ public class Bot extends ListenerAdapter {
                     if (keywords.length == 2) {
                         MySQL.changePassword(hostname, keywords[1], sender);
                     } else {
-                        sendMessage(sender, "Incorrect syntax! Usage is: /msg " + cfg_data.ircName + " changepw <new_password>");
+                        asyncIRCMessage(sender,"Incorrect syntax! Usage is: /msg " + cfg_data.ircName + " changepw <new_password>");
                     }
                     break;
                 case ".banwad":
@@ -1172,7 +1203,7 @@ public class Bot extends ListenerAdapter {
                     if (keywords.length == 2) {
                         MySQL.registerAccount(hostname, keywords[1], sender);
                     } else {
-                        sendMessage(sender, "Incorrect syntax! Usage is: /msg " + cfg_data.ircName + " register <password>");
+                        asyncIRCMessage(sender,"Incorrect syntax! Usage is: /msg " + cfg_data.ircName + " register <password>");
                     }
                     break;
                 case ".send":
@@ -1184,7 +1215,7 @@ public class Bot extends ListenerAdapter {
                     break;
             }
         } else {
-            sendMessage(sender, "Your account is not logged in properly to the IRC network. Please log in and re-query.");
+            asyncIRCMessage(sender,"Your account is not logged in properly to the IRC network. Please log in and re-query.");
         }
     }
 
@@ -1218,12 +1249,21 @@ public class Bot extends ListenerAdapter {
      * @param msg The message to deploy
      */
     public void sendMessageToChannel(String msg) {
-        sendMessage(cfg_data.ircChannel, msg);
+        asyncIRCMessage(cfg_data.ircChannel, msg);
+    }
+
+    public void asyncIRCMessage(final String target, final String message) {
+        ircMessageQueue.add(new IRCMessage(target, message, false));
+    }
+
+    public void asyncCTCPMessage(final String target, final String message) {
+        ircMessageQueue.add(new IRCMessage(target, message, true));
     }
 
     /**
      * Contains the main methods that are run on start up for the bot The
      * arguments should contain the path to the Bot.cfg file only
+     *
      * @param args
      */
     public static void main(String[] args) {
@@ -1242,20 +1282,73 @@ public class Bot extends ListenerAdapter {
             return;
         } catch (IOException e) {
             System.out.println("Warning: ini file IOException!");
-            e.printStackTrace();
             return;
         }
 
         // Start the bot
         Bot b = new Bot(cfg_data);
         b.config_file = args[0];
+
+        Character mask = null;
+        String trigger = null;
+        ConsoleReader reader;
+        try {
+            reader = new ConsoleReader();
+        } catch (IOException ex) {
+            java.util.logging.Logger.getLogger(Bot.class.getName()).log(Level.SEVERE, null, ex);
+            return;
+        }
+        reader.setBellEnabled(false);
+        try {
+            reader.setDebug(new PrintWriter(new FileWriter("writer.debug", true)));
+        } catch (IOException ex) {
+            java.util.logging.Logger.getLogger(Bot.class.getName()).log(Level.SEVERE, null, ex);
+            return;
+        }
+
+        String line;
+        PrintWriter out = new PrintWriter(System.out);
+
+        try {
+            while ((line = reader.readLine("DoomBot> ")) != null) {
+                out.flush();
+                if ((trigger != null) && (line.compareTo(trigger) == 0)) {
+                    line = reader.readLine("password> ", mask);
+                }
+                if (line.equalsIgnoreCase("irc quit")) {
+                    b.pircBotThread.cancel();
+                }
+                if (line.equalsIgnoreCase("irc start")) {
+                    b.buildAndStartIrcBot();
+                }
+                if (line.equalsIgnoreCase("quit") || line.equalsIgnoreCase("exit")) {
+                    b.pircBotThread.cancel();
+                    b.processKillAll(ADMIN);
+                    b.queryManager.cancel();
+                    break;
+                }
+            }
+        } catch (IOException ex) {
+            java.util.logging.Logger.getLogger(Bot.class.getName()).log(Level.SEVERE, null, ex);
+        }
     }
 
     /*
-     * IRC methods
+     * Blocking IRC message
      */
-    public void sendMessage(String target, String message) {
-        bot.sendIRC().message(target, message);
+    public void blockingIRCMessage(String target, String message) {
+        if (bot.isConnected()) {
+            bot.sendIRC().message(target, message);
+        }
+    }
+
+    /*
+     * Blocking CTCP message
+     */
+    public void blockingCTCPMessage(String target, String message) {
+        if (bot.isConnected()) {
+            bot.sendIRC().ctcpResponse(target, message);
+        }
     }
 
 }

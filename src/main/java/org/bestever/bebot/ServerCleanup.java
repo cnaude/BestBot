@@ -52,7 +52,7 @@ public class ServerCleanup extends TimerTask {
         }
         // Send a message to the channel if we've killed a server like this
         if (killed > 0) {
-            bot.sendMessage(bot.cfg_data.ircChannel, Functions.pluralize("Killed " + killed + " inactive server{s} (inactive for " + bot.cfg_data.cleanup_interval + " days.", killed));
+            bot.blockingIRCMessage(bot.cfg_data.ircChannel, Functions.pluralize("Killed " + killed + " inactive server{s} (inactive for " + bot.cfg_data.cleanup_interval + " days.", killed));
         }
     }
 }

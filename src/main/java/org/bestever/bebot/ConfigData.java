@@ -30,6 +30,11 @@ public class ConfigData {
      * Contains the path to the config file
      */
     public String filepath;
+    
+    /**
+     * Auto reconnect IRC 
+     */
+    public boolean ircAutoReconnect;
 
     /**
      * The name of the irc bot
@@ -269,14 +274,15 @@ public class ConfigData {
 
         // Load the IRC section
         Ini.Section irc = ini.get("irc");
-        this.ircChannel = irc.get("channel");
-        this.ircName = irc.get("name");
-        this.ircUser = irc.get("user");
-        this.ircVersion = irc.get("version");
-        this.ircServer = irc.get("network");
-        this.ircPass = irc.get("pass");
-        this.ircPort = Integer.parseInt(irc.get("port"));
-        this.irc_mask = irc.get("hostmask");
+        this.ircChannel = irc.get("channel", "#cnaude");
+        this.ircName = irc.get("name", "BestBot");
+        this.ircUser = irc.get("user", "BestBot");
+        this.ircVersion = irc.get("version", "1.0");
+        this.ircServer = irc.get("network", "localhost");
+        this.ircPass = irc.get("pass", "");
+        this.ircPort = Integer.parseInt(irc.get("port", "6667"));
+        this.irc_mask = irc.get("hostmask", "");
+        this.ircAutoReconnect = Boolean.parseBoolean(irc.get("autoreconnect", "true"));
 
         // Load the MYSQL section
         Ini.Section mysql = ini.get("mysql");
@@ -306,8 +312,12 @@ public class ConfigData {
         this.bot_executable_developerrepository = bot.get("executable_developerrepository");
         this.bot_public_rcon = Boolean.parseBoolean(bot.get("public_rcon"));
         this.bot_hostname_base = bot.get("hostname_base");
-        this.bot_help = bot.get("help");
-        this.cleanup_interval = Integer.parseInt(bot.get("cleanup_interval"));
+        this.bot_help = bot.get("help", "");
+        if (bot.get("cleanup_interval") != null) {
+            this.cleanup_interval = Integer.parseInt(bot.get("cleanup_interval"));
+        } else {
+            this.cleanup_interval = 1000;
+        }
         if (bot.get("notice") != null) {
             this.bot_notice = bot.get("notice");
         }
@@ -317,5 +327,6 @@ public class ConfigData {
         if (bot.get("extra_wads") != null) {
             this.bot_extra_wads = new ArrayList<>(getExtraWads(bot.get("extra_wads")));
         }
+        
     }
 }

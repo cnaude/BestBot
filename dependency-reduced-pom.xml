@@ -6,7 +6,7 @@
   <name>BestBot</name>
   <version>0.1-${build.number}</version>
   <description>A Zandrom IRC bot.</description>
-  <url>http://cnaude.org/ZurpleIRC</url>
+  <url>http://cnaude.org</url>
   <build>
     <plugins>
       <plugin>
@@ -14,7 +14,7 @@
         <configuration>
           <archive>
             <manifest>
-              <mainClass>com.cnaude.zurpleirc.ZurpleIRC</mainClass>
+              <mainClass>org.bestever.bebot.Bot</mainClass>
             </manifest>
           </archive>
         </configuration>
@@ -43,7 +43,10 @@
                   <include>org.pircbotx</include>
                   <include>org.slf4j</include>
                   <include>org.apache.commons</include>
+                  <include>org.ini4j</include>
                   <include>jline</include>
+                  <include>com.google.guava</include>
+                  <include>mysql-connector-java</include>
                 </includes>
               </artifactSet>
               <filters />
@@ -65,8 +68,20 @@
                   <shadedPattern>org.apache.commons.lang3</shadedPattern>
                 </relocation>
                 <relocation>
+                  <pattern>org.ini4j</pattern>
+                  <shadedPattern>org.ini4j</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.google.guava</pattern>
+                  <shadedPattern>com.google.guava</shadedPattern>
+                </relocation>
+                <relocation>
                   <pattern>jline</pattern>
                   <shadedPattern>jline</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>mysql</pattern>
+                  <shadedPattern>mysql</shadedPattern>
                 </relocation>
               </relocations>
             </configuration>
@@ -125,12 +140,6 @@
       <scope>compile</scope>
     </dependency>
     <dependency>
-      <groupId>com.google.guava</groupId>
-      <artifactId>guava</artifactId>
-      <version>17.0</version>
-      <scope>compile</scope>
-    </dependency>
-    <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
       <version>4.10</version>
@@ -149,9 +158,9 @@
       <scope>test</scope>
     </dependency>
     <dependency>
-      <groupId>org.ini4j</groupId>
-      <artifactId>ini4j</artifactId>
-      <version>0.5.2</version>
+      <groupId>mysql</groupId>
+      <artifactId>mysql-connector-java</artifactId>
+      <version>5.1.6</version>
       <scope>compile</scope>
     </dependency>
   </dependencies>
