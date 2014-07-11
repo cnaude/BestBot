@@ -61,14 +61,14 @@ public class QueryManager {
         this.bot = bot;
         timer.schedule(new TimerTask() {
             @Override
-            public void run() {
+            public void run() {                
                 // If we are not processing a request and we have a query, handle it
                 if (!processingQuery && queryRequests.size() > 0) {
                     processQuery();
                 }
 
             }
-        }, 0, 1000);
+        }, 0, 1000);        
     }
 
     /**
@@ -103,6 +103,7 @@ public class QueryManager {
         ServerQueryRequest targetQuery = queryRequests.poll();
         if (targetQuery != null) {
             QueryHandler query = new QueryHandler(targetQuery, bot, this); // Must give it a reference to ourselves to signal query completion
+            query.start();
         } else {
             bot.sendMessageToChannel("targetQuery was somehow null, aborting query.");
             signalProcessQueryComplete();

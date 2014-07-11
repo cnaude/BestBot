@@ -42,6 +42,7 @@ import org.bestever.serverquery.ServerQueryRequest;
 import org.pircbotx.Channel;
 import org.pircbotx.Configuration;
 import org.pircbotx.PircBotX;
+import org.pircbotx.exception.IrcException;
 import org.pircbotx.hooks.ListenerAdapter;
 import org.pircbotx.hooks.events.JoinEvent;
 import org.pircbotx.hooks.events.KickEvent;
@@ -138,8 +139,7 @@ public class Bot extends ListenerAdapter {
      * @param cfgfile
      */
     @SuppressWarnings("LeakingThisInConstructor")
-    public Bot(ConfigData cfgfile) {
-        // Point our config data to what we created back in RunMe.java
+    public Bot(ConfigData cfgfile) {        
         cfg_data = cfgfile;
         buildAndStartIrcBot();
         ircMessageQueue = new IRCMessageQueueWatcher(this);
@@ -1060,7 +1060,7 @@ public class Bot extends ListenerAdapter {
                         if (Functions.getUserName(s.irc_hostname).equals(Functions.getUserName(hostname)) || isAccountTypeOf(userLevel, MODERATOR, ADMIN)) {
                             asyncIRCMessage(sender,"RCON: " + s.rcon_password);
                             asyncIRCMessage(sender,"ID: " + s.server_id);
-                            asyncIRCMessage(sender,"LOG: http://static.best-ever.org/logs/" + s.server_id + ".txt");
+                            asyncIRCMessage(sender,"LOG: http://cnaude.org/logs/" + s.server_id + ".txt");
                         } else {
                             asyncIRCMessage(sender,"You do not own this server.");
                         }
@@ -1315,16 +1315,21 @@ public class Bot extends ListenerAdapter {
                 if ((trigger != null) && (line.compareTo(trigger) == 0)) {
                     line = reader.readLine("password> ", mask);
                 }
-                if (line.equalsIgnoreCase("irc quit")) {
-                    b.pircBotThread.cancel();
+                if (line.equalsIgnoreCase("irc disconnect")) {
+                    b.bot.sendIRC().quitServer("Disconnecting via console.");
                 }
-                if (line.equalsIgnoreCase("irc start")) {
-                    b.buildAndStartIrcBot();
+                if (line.equalsIgnoreCase("irc connect")) {
+                    try {
+                        b.bot.startBot();
+                    } catch (IrcException ex) {
+                        java.util.logging.Logger.getLogger(Bot.class.getName()).log(Level.SEVERE, null, ex);
+                    }
                 }
                 if (line.equalsIgnoreCase("quit") || line.equalsIgnoreCase("exit")) {
                     b.pircBotThread.cancel();
                     b.processKillAll(ADMIN);
                     b.queryManager.cancel();
+                    b.processQuit(ADMIN);
                     break;
                 }
             }

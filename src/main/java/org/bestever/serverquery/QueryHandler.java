@@ -318,7 +318,7 @@ public class QueryHandler extends Thread {
         try {
             IPAddress = InetAddress.getByName(request.getIP());
         } catch (UnknownHostException e1) {
-            bot.sendMessageToChannel("Error: Query IP address could not be resolved or is using IPv6.");
+            bot.sendMessageToChannel("[Error] Unknown host: " + request.getIP());
             return;
         }
         int port = request.getPort();

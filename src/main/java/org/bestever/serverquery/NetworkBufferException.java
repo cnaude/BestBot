@@ -12,7 +12,6 @@
 // GNU General Public License for more details.
 //
 // --------------------------------------------------------------------------
-
 package org.bestever.serverquery;
 
 /**
@@ -20,23 +19,24 @@ package org.bestever.serverquery;
  */
 public class NetworkBufferException extends RuntimeException {
 
-	/**
-	 * Serial ID of this object
-	 */
-	private static final long serialVersionUID = 2556273329727331623L;
+    /**
+     * Serial ID of this object
+     */
+    private static final long serialVersionUID = 2556273329727331623L;
 
-	/**
-	 * A standard exception with no reason
-	 */
-	public NetworkBufferException() {
-		super();
-	}
+    /**
+     * A standard exception with no reason
+     */
+    public NetworkBufferException() {
+        super();
+    }
 
-	/**
-	 * An exception with a reason to indicate what happened
-	 * @param msg A string of why it happened
-	 */
-	public NetworkBufferException(String msg) {
-		super(msg);
-	}
+    /**
+     * An exception with a reason to indicate what happened
+     *
+     * @param msg A string of why it happened
+     */
+    public NetworkBufferException(String msg) {
+        super(msg);
+    }
 }

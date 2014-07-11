@@ -12,28 +12,28 @@
 // GNU General Public License for more details.
 //
 // --------------------------------------------------------------------------
-
 package org.bestever.serverquery;
 
 public class NetworkPacketProcessException extends Exception {
 
-	/**
-	 * Generated UID
-	 */
-	private static final long serialVersionUID = 2329146796395286679L;
+    /**
+     * Generated UID
+     */
+    private static final long serialVersionUID = 2329146796395286679L;
 
-	/**
-	 * A standard exception with no reason
-	 */
-	public NetworkPacketProcessException() {
-		super();
-	}
+    /**
+     * A standard exception with no reason
+     */
+    public NetworkPacketProcessException() {
+        super();
+    }
 
-	/**
-	 * An exception with a reason to indicate what happened
-	 * @param msg A string of why it happened
-	 */
-	public NetworkPacketProcessException(String msg) {
-		super(msg);
-	}
+    /**
+     * An exception with a reason to indicate what happened
+     *
+     * @param msg A string of why it happened
+     */
+    public NetworkPacketProcessException(String msg) {
+        super(msg);
+    }
 }
