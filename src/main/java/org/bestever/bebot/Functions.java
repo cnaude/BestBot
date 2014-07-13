@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import org.pircbotx.User;
 
 public class Functions {
 
@@ -145,8 +146,49 @@ public class Functions {
      * @param hostname The user's host name
      * @return username The user's actual IRC name
      */
+    /*
     public static String getUserName(String hostname) {
         return hostname.replace(".users.zandronum.com", "");
+    }*/
+    
+    /**
+     *
+     * @param user
+     * @param userMask
+     * @return
+     */
+    public static boolean checkUserMask(User user, String userMask) {
+        String mask[] = userMask.split("[\\!\\@]", 3);
+        if (mask.length == 3) {
+            String gUser = RegexGlobber.createRegexFromGlob(mask[0]);
+            String gLogin = RegexGlobber.createRegexFromGlob(mask[1]);
+            String gHost = RegexGlobber.createRegexFromGlob(mask[2]);
+            return (user.getNick().matches(gUser)
+                    && user.getLogin().matches(gLogin)
+                    && user.getHostmask().matches(gHost));
+        }
+        return false;
+    }
+    
+    /**
+     *
+     * @param nick
+     * @param login
+     * @param host
+     * @param userMask
+     * @return
+     */
+    public static boolean checkUserMask(String nick, String login, String host, String userMask) {
+        String mask[] = userMask.split("[\\!\\@]", 3);
+        if (mask.length == 3) {
+            String gUser = RegexGlobber.createRegexFromGlob(mask[0]);
+            String gLogin = RegexGlobber.createRegexFromGlob(mask[1]);
+            String gHost = RegexGlobber.createRegexFromGlob(mask[2]);
+            return (nick.matches(gUser)
+                    && login.matches(gLogin)
+                    && host.matches(gHost));
+        }
+        return false;
     }
 
     /**
@@ -155,10 +197,11 @@ public class Functions {
      * @param hostname The user's hostname
      * @return username True if logged in, false if not
      */
+    /*
     public static boolean checkLoggedIn(String hostname) {
         hostname = hostname.replace(".users.zandronum.com", "");
         return !hostname.contains(".");
-    }
+    } */
 
     /**
      * Checks to see if a number is numeric In a recent update, now checks

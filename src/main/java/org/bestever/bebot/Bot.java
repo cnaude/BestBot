@@ -42,11 +42,13 @@ import org.bestever.serverquery.ServerQueryRequest;
 import org.pircbotx.Channel;
 import org.pircbotx.Configuration;
 import org.pircbotx.PircBotX;
+import org.pircbotx.User;
 import org.pircbotx.exception.IrcException;
 import org.pircbotx.hooks.ListenerAdapter;
 import org.pircbotx.hooks.events.JoinEvent;
 import org.pircbotx.hooks.events.KickEvent;
 import org.pircbotx.hooks.events.MessageEvent;
+import org.pircbotx.hooks.events.PrivateMessageEvent;
 
 /**
  * This is where the bot methods are run and handling of channel/PM input are
@@ -139,7 +141,7 @@ public class Bot extends ListenerAdapter {
      * @param cfgfile
      */
     @SuppressWarnings("LeakingThisInConstructor")
-    public Bot(ConfigData cfgfile) {        
+    public Bot(ConfigData cfgfile) {
         cfg_data = cfgfile;
         buildAndStartIrcBot();
         ircMessageQueue = new IRCMessageQueueWatcher(this);
@@ -211,17 +213,17 @@ public class Bot extends ListenerAdapter {
      */
     public void addExtraWad(String wad, String sender) {
         if (!Functions.fileExists(cfg_data.bot_wad_directory_path + wad)) {
-            asyncIRCMessage(sender,"Cannot add " + wad + " as it does not exist.");
+            asyncIRCMessage(sender, "Cannot add " + wad + " as it does not exist.");
             return;
         }
         for (String listWad : cfg_data.bot_extra_wads) {
             if (listWad.equalsIgnoreCase(wad)) {
-                asyncIRCMessage(sender,"Cannot add " + listWad + " as it already exists in the wad startup list.");
+                asyncIRCMessage(sender, "Cannot add " + listWad + " as it already exists in the wad startup list.");
                 return;
             }
         }
         cfg_data.bot_extra_wads.add(wad);
-        asyncIRCMessage(sender,"Added " + wad + " to the wad startup list.");
+        asyncIRCMessage(sender, "Added " + wad + " to the wad startup list.");
     }
 
     /**
@@ -234,11 +236,11 @@ public class Bot extends ListenerAdapter {
         for (String listWad : cfg_data.bot_extra_wads) {
             if (listWad.equalsIgnoreCase(wad)) {
                 cfg_data.bot_extra_wads.remove(wad);
-                asyncIRCMessage(sender,"Wad " + wad + " was removed from the wad startup list.");
+                asyncIRCMessage(sender, "Wad " + wad + " was removed from the wad startup list.");
                 return;
             }
         }
-        asyncIRCMessage(sender,"Wad " + wad + " was not found in the wad startup list.");
+        asyncIRCMessage(sender, "Wad " + wad + " was not found in the wad startup list.");
     }
 
     /**
@@ -287,24 +289,35 @@ public class Bot extends ListenerAdapter {
     /**
      * Returns a list of servers belonging to the specified user
      *
-     * @param username their IRC username
+     * @param user
      * @return a list of server objects
      */
-    public List<Server> getUserServers(String username) {
-        logMessage(LOGLEVEL_DEBUG, "Getting all servers from " + username + ".");
+    public List<Server> getUserServers(String nick, String login, String hostmask) {
+        logMessage(LOGLEVEL_DEBUG, "Getting all servers from " + nick + ".");
         if (servers == null || servers.isEmpty()) {
             return null;
         }
-        Server desiredServer;
-        ListIterator<Server> it = servers.listIterator();
         List<Server> serverList = new ArrayList<>();
-        while (it.hasNext()) {
-            desiredServer = it.next();
-            if (Functions.getUserName(desiredServer.irc_hostname).equalsIgnoreCase(username)) {
-                serverList.add(desiredServer);
+        if (!MySQL.getUserName(nick, login, hostmask).isEmpty()) {
+            ListIterator<Server> it = servers.listIterator();
+            while (it.hasNext()) {
+                Server desiredServer = it.next();
+                if (Functions.checkUserMask(nick, login, hostmask, desiredServer.ircHostmask)) {
+                    serverList.add(desiredServer);
+                }
             }
         }
         return serverList;
+    }
+    
+    /**
+     * Returns a list of servers belonging to the specified user
+     *
+     * @param user
+     * @return a list of server objects
+     */
+    public List<Server> getUserServers(User user) {
+        return getUserServers(user.getNick(), user.getLogin(), user.getHostmask());
     }
 
     /**
@@ -429,7 +442,7 @@ public class Bot extends ListenerAdapter {
      * @param recipient String - who to return the message to (since this can be
      * accessed via PM as well as channel)
      */
-    private void sendCommand(int level, String[] keywords, String hostname, String recipient) {
+    private void sendCommand(User user, int level, String[] keywords, String recipient) {
         if (isAccountTypeOf(level, REGISTERED, MODERATOR, ADMIN)) {
             if (keywords.length > 2) {
                 if (Functions.isNumeric(keywords[1])) {
@@ -437,7 +450,7 @@ public class Bot extends ListenerAdapter {
                     String message = Functions.implode(Arrays.copyOfRange(keywords, 2, keywords.length), " ");
                     Server s = getServer(port);
                     if (s != null) {
-                        if (Functions.getUserName(s.irc_hostname).equals(Functions.getUserName(hostname)) || isAccountTypeOf(level, MODERATOR)) {
+                        if (!MySQL.getUserName(user).isEmpty() && isAccountTypeOf(level, MODERATOR)) {
                             s.in.println(message);
                             if (keywords[2].equalsIgnoreCase("sv_rconpassword") && keywords.length > 2) {
                                 s.rcon_password = keywords[3];
@@ -475,16 +488,17 @@ public class Bot extends ListenerAdapter {
             String[] keywords = event.getMessage().split(" ");
 
             // Use soon!
-            // String username = Functions.getUserName(hostname);
+            // String username = MySQL.getUserName(hostname);
             // Support custom hostnames
-            //if (!Functions.checkLoggedIn(hostname)) {
-            //    if (!MySQL.getUsername(hostname).equals("None")) {
-            //        hostname = MySQL.getUsername(hostname);
-            //    }
-            //}
+            /*
+             if (!Functions.checkLoggedIn(hostname)) {
+             if (!MySQL.getUsername(hostname).equals("None")) {
+             hostname = MySQL.getUsername(hostname);
+             }
+             } */
             // Perform function based on input (note: login is handled by the MySQL function/class); also mostly in alphabetical order for convenience
-            //int userLevel = MySQL.getLevel(hostname);
-            int userLevel = ADMIN;
+            int userLevel = MySQL.getLevel(hostname);
+            //int userLevel = ADMIN;
             switch (keywords[0].toLowerCase()) {
                 case ".autorestart":
                     toggleAutoRestart(userLevel, keywords);
@@ -517,16 +531,16 @@ public class Bot extends ListenerAdapter {
                     }
                     break;
                 case ".host":
-                    processHost(userLevel, channel, sender, hostname, message, false, getMinPort());
+                    processHost(event.getUser(), userLevel, channel, sender, message, false, getMinPort());
                     break;
                 case ".kill":
-                    processKill(userLevel, keywords, hostname);
+                    processKill(event.getUser(), userLevel, keywords);
                     break;
                 case ".killall":
                     processKillAll(userLevel);
                     break;
                 case ".killmine":
-                    processKillMine(userLevel, hostname);
+                    processKillMine(event.getUser(), userLevel);
                     break;
                 case ".killinactive":
                     processKillInactive(userLevel, keywords);
@@ -535,7 +549,7 @@ public class Bot extends ListenerAdapter {
                     sendMessageToChannel("These wads are automatically loaded when a server is started: " + Functions.implode(cfg_data.bot_extra_wads, ", "));
                     break;
                 case ".load":
-                    MySQL.loadSlot(hostname, keywords, userLevel, channel, sender);
+                    MySQL.loadSlot(event.getUser(), keywords, userLevel, channel, sender);
                     break;
                 case ".notice":
                     setNotice(keywords, userLevel);
@@ -547,7 +561,7 @@ public class Bot extends ListenerAdapter {
                     processOn(userLevel);
                     break;
                 case ".owner":
-                    processOwner(userLevel, keywords);
+                    processOwner(event.getUser(), userLevel, keywords);
                     break;
                 case ".protect":
                     protectServer(userLevel, keywords);
@@ -570,18 +584,18 @@ public class Bot extends ListenerAdapter {
                     }
                     break;
                 case ".save":
-                    MySQL.saveSlot(hostname, keywords);
+                    MySQL.saveSlot(event.getUser(), keywords);
                     break;
                 case ".send":
                     if (isAccountTypeOf(userLevel, ADMIN, MODERATOR)) {
-                        sendCommand(userLevel, keywords, hostname, cfg_data.ircChannel);
+                        sendCommand(event.getUser(), userLevel, keywords, cfg_data.ircChannel);
                     }
                     break;
                 case ".servers":
-                    processServers(keywords);
+                    processServers(event.getUser());
                     break;
                 case ".slot":
-                    MySQL.showSlot(hostname, keywords);
+                    MySQL.showSlot(event.getUser(), hostname, keywords);
                     break;
                 case ".uptime":
                     if (keywords.length == 1) {
@@ -591,7 +605,7 @@ public class Bot extends ListenerAdapter {
                     }
                     break;
                 case ".whoami":
-                    sendMessageToChannel(getLoggedIn(hostname, userLevel));
+                    sendMessageToChannel(getLoggedIn(event.getUser(), userLevel));
                     break;
                 default:
                     break;
@@ -661,9 +675,9 @@ public class Bot extends ListenerAdapter {
      * @param level int - bitmask level of the user
      * @return whether the user is logged in or not
      */
-    private String getLoggedIn(String hostname, int level) {
+    private String getLoggedIn(User user, int level) {
         if (isAccountTypeOf(level, REGISTERED)) {
-            return "You are logged in as " + Functions.getUserName(hostname);
+            return "You are logged in as " + MySQL.getUserName(user);
         } else {
             return "You are not logged in or do not have an account with BE. Please visit http://www.best-ever.org/ for instructions on how to register";
         }
@@ -699,7 +713,7 @@ public class Bot extends ListenerAdapter {
      */
     private void messageChannel(String[] keywords, String sender) {
         if (keywords.length < 2) {
-            asyncIRCMessage(sender,"Incorrect syntax! Correct usage is .msg your_message");
+            asyncIRCMessage(sender, "Incorrect syntax! Correct usage is .msg your_message");
         } else {
             String message = Functions.implode(Arrays.copyOfRange(keywords, 1, keywords.length), " ");
             sendMessageToChannel(message);
@@ -756,27 +770,23 @@ public class Bot extends ListenerAdapter {
     /**
      * Passes the host command off to a static method to create the server
      *
+     * @param user
      * @param userLevel The user's bitmask level
      * @param channel IRC data associated with the sender
      * @param sender * @param hostname IRC data associated with the sender
-     * @param hostname
      * @param message The entire message to be processed
      * @param autoRestart
      * @param port
      */
-    public void processHost(int userLevel, String channel, String sender, String hostname, String message, boolean autoRestart, int port) {
-        logMessage(LOGLEVEL_NORMAL, "Processing the host command for " + Functions.getUserName(hostname) + " with the message \"" + message + "\".");
+    public void processHost(int userLevel, String channel, String sender, String nick, String login, String hostmask, String message, boolean autoRestart, int port) {
+        logMessage(LOGLEVEL_NORMAL, "Processing the host command for " + nick + " with the message \"" + message + "\".");
         if (botEnabled || isAccountTypeOf(userLevel, ADMIN, MODERATOR)) {
             if (isAccountTypeOf(userLevel, REGISTERED)) {
-                int slots = MySQL.getMaxSlots(hostname);
+                int slots = MySQL.getMaxSlots(nick, login, hostmask);
                 int userServers;
-                if (getUserServers(Functions.getUserName(hostname)) == null) {
-                    userServers = 0;
-                } else {
-                    userServers = getUserServers(Functions.getUserName(hostname)).size();
-                }
+                userServers = getUserServers(nick, login, hostmask).size();
                 if (slots > userServers) {
-                    Server.handleHostCommand(this, servers, channel, sender, hostname, message, userLevel, autoRestart, port);
+                    Server.handleHostCommand(nick, login, hostmask, this, servers, channel, sender, message, userLevel, autoRestart, port);
                 } else {
                     sendMessageToChannel("You have reached your server limit (" + slots + ")");
                 }
@@ -787,6 +797,21 @@ public class Bot extends ListenerAdapter {
             sendMessageToChannel("The bot is currently disabled from hosting for the time being. Sorry for any inconvenience!");
         }
     }
+    
+    /**
+     * Passes the host command off to a static method to create the server
+     *
+     * @param user
+     * @param userLevel The user's bitmask level
+     * @param channel IRC data associated with the sender
+     * @param sender * @param hostname IRC data associated with the sender
+     * @param message The entire message to be processed
+     * @param autoRestart
+     * @param port
+     */
+    public void processHost(User user, int userLevel, String channel, String sender, String message, boolean autoRestart, int port) {
+        processHost(userLevel, channel, sender, user.getNick(), user.getLogin(), user.getHostmask(), message, autoRestart, port);
+    }
 
     /**
      * Attempts to kill a server based on the port
@@ -795,7 +820,7 @@ public class Bot extends ListenerAdapter {
      * @param keywords The keywords to be processed
      * @param hostname hostname from the sender
      */
-    private void processKill(int userLevel, String[] keywords, String hostname) {
+    private void processKill(User user, int userLevel, String[] keywords) {
         logMessage(LOGLEVEL_NORMAL, "Processing kill.");
         // Ensure proper syntax
         if (keywords.length != 2) {
@@ -820,7 +845,7 @@ public class Bot extends ListenerAdapter {
             if (Functions.isNumeric(keywords[1])) {
                 Server server = getServer(Integer.parseInt(keywords[1]));
                 if (server != null) {
-                    if (Functions.getUserName(server.irc_hostname).equalsIgnoreCase(Functions.getUserName(hostname)) || isAccountTypeOf(userLevel, MODERATOR, ADMIN)) {
+                    if (!MySQL.getUserName(user).isEmpty() || isAccountTypeOf(userLevel, MODERATOR, ADMIN)) {
                         if (server.serverprocess != null) {
                             server.auto_restart = false;
                             server.serverprocess.terminateServer();
@@ -877,10 +902,10 @@ public class Bot extends ListenerAdapter {
      * @param userLevel The level of the user
      * @param hostname The hostname of the person invoking this command
      */
-    private void processKillMine(int userLevel, String hostname) {
+    private void processKillMine(User user, int userLevel) {
         logMessage(LOGLEVEL_TRIVIAL, "Processing killmine.");
         if (isAccountTypeOf(userLevel, ADMIN, MODERATOR, REGISTERED)) {
-            List<Server> serverList = getUserServers(Functions.getUserName(hostname));
+            List<Server> serverList = getUserServers(user);
             if (serverList != null) {
                 ArrayList<String> ports = new ArrayList<>();
                 for (Server s : serverList) {
@@ -985,13 +1010,13 @@ public class Bot extends ListenerAdapter {
      * @param userLevel The level of the user requesting the data
      * @param keywords The keywords to pass
      */
-    private void processOwner(int userLevel, String[] keywords) {
+    private void processOwner(User user, int userLevel, String[] keywords) {
         logMessage(LOGLEVEL_DEBUG, "Processing an owner.");
         if (keywords.length == 2) {
             if (Functions.isNumeric(keywords[1])) {
                 Server s = getServer(Integer.parseInt(keywords[1]));
                 if (s != null) {
-                    sendMessageToChannel("The owner of port " + keywords[1] + " is: " + s.sender + "[" + Functions.getUserName(s.irc_hostname) + "].");
+                    sendMessageToChannel("The owner of port " + keywords[1] + " is: " + s.sender + "[" + user.getNick() + "].");
                 } else {
                     sendMessageToChannel("There is no server running on " + keywords[1] + ".");
                 }
@@ -1049,7 +1074,7 @@ public class Bot extends ListenerAdapter {
      * @param sender String - the nickname of the sender
      * @param hostname String - the hostname of the sender
      */
-    private void processRcon(int userLevel, String[] keywords, String sender, String hostname) {
+    private void processRcon(User user, int userLevel, String[] keywords, String sender) {
         logMessage(LOGLEVEL_NORMAL, "Processing a request for rcon (from " + sender + ").");
         if (isAccountTypeOf(userLevel, REGISTERED, MODERATOR, ADMIN)) {
             if (keywords.length == 2) {
@@ -1057,21 +1082,21 @@ public class Bot extends ListenerAdapter {
                     int port = Integer.parseInt(keywords[1]);
                     Server s = getServer(port);
                     if (s != null) {
-                        if (Functions.getUserName(s.irc_hostname).equals(Functions.getUserName(hostname)) || isAccountTypeOf(userLevel, MODERATOR, ADMIN)) {
-                            asyncIRCMessage(sender,"RCON: " + s.rcon_password);
-                            asyncIRCMessage(sender,"ID: " + s.server_id);
-                            asyncIRCMessage(sender,"LOG: http://cnaude.org/logs/" + s.server_id + ".txt");
+                        if (!MySQL.getUserName(user).isEmpty() && isAccountTypeOf(userLevel, MODERATOR, ADMIN)) {
+                            asyncIRCMessage(sender, "RCON: " + s.rcon_password);
+                            asyncIRCMessage(sender, "ID: " + s.server_id);
+                            asyncIRCMessage(sender, "LOG: http://cnaude.org/logs/" + s.server_id + ".txt");
                         } else {
-                            asyncIRCMessage(sender,"You do not own this server.");
+                            asyncIRCMessage(sender, "You do not own this server.");
                         }
                     } else {
-                        asyncIRCMessage(sender,"Server does not exist.");
+                        asyncIRCMessage(sender, "Server does not exist.");
                     }
                 } else {
-                    asyncIRCMessage(sender,"Port must be a number!");
+                    asyncIRCMessage(sender, "Port must be a number!");
                 }
             } else {
-                asyncIRCMessage(sender,"Incorrect syntax! Correct syntax is .rcon <port>");
+                asyncIRCMessage(sender, "Incorrect syntax! Correct syntax is .rcon <port>");
             }
         }
     }
@@ -1093,44 +1118,37 @@ public class Bot extends ListenerAdapter {
      *
      * @param keywords String[] - the message
      */
-    private void processServers(String[] keywords) {
+    private void processServers(User user) {
         logMessage(LOGLEVEL_NORMAL, "Getting a list of servers.");
-        if (keywords.length == 2) {
-            List<Server> serverList = getUserServers(Functions.getUserName(keywords[1]));
-            if (serverList != null && serverList.size() > 0) {
-                for (Server server : serverList) {
-                    sendMessageToChannel(server.port + ": " + server.servername + ((server.wads != null)
-                            ? " with wads " + Functions.implode(server.wads, ", ") : ""));
-                }
-            } else {
-                sendMessageToChannel("User " + Functions.getUserName(keywords[1]) + " has no servers running.");
+        List<Server> serverList = getUserServers(user);
+        if (serverList != null && serverList.size() > 0) {
+            for (Server server : serverList) {
+                sendMessageToChannel(server.port + ": " + server.servername + ((server.wads != null)
+                        ? " with wads " + Functions.implode(server.wads, ", ") : ""));
             }
-        } else if (keywords.length == 1) {
-            sendMessageToChannel(Functions.pluralize("There are " + servers.size() + " server{s}.", servers.size()));
         } else {
-            sendMessageToChannel("Incorrect syntax! Correct usage is .servers or .servers <username>");
+            sendMessageToChannel("User " + user.getNick() + " has no servers running.");
         }
+    }
+
+    public boolean isValidUser(User user) {
+        return !MySQL.getUserName(user).isEmpty();
     }
 
     /**
      * Have the bot handle private message events
      *
-     * @param sender The IRC data of the sender
-     * @param login The IRC data of the sender
-     * @param hostname The IRC data of the sender
-     * @param message The message transmitted
+     * @param event
      */
-    public void onPrivateMessage(String sender, String login, String hostname, String message) {
-
-        // Check for custom hostmasks
-        if (!Functions.checkLoggedIn(hostname)) {
-            if (!MySQL.getUsername(hostname).equals("None")) {
-                hostname = MySQL.getUsername(hostname);
-            }
-        }
+    @Override
+    public void onPrivateMessage(PrivateMessageEvent event) {
+        String message = event.getMessage();
+        String hostname = event.getUser().getHostmask();
+        String sender = event.getUser().getNick();
+        User user = event.getUser();
 
         // As of now, you can only perform commands if you are logged in, so we don't need an else here
-        if (Functions.checkLoggedIn(hostname)) {
+        if (isValidUser(user)) {
             // Generate an array of keywords from the message (similar to onMessage)
             String[] keywords = message.split(" ");
             int userLevel = MySQL.getLevel(hostname);
@@ -1151,15 +1169,15 @@ public class Bot extends ListenerAdapter {
                     }
                     break;
                 case ".rcon":
-                    processRcon(userLevel, keywords, sender, hostname);
+                    processRcon(user, userLevel, keywords, sender);
                     break;
                 case "changepass":
                 case "changepassword":
                 case "changepw":
                     if (keywords.length == 2) {
-                        MySQL.changePassword(hostname, keywords[1], sender);
+                        MySQL.changePassword(user, keywords[1], sender);
                     } else {
-                        asyncIRCMessage(sender,"Incorrect syntax! Usage is: /msg " + cfg_data.ircName + " changepw <new_password>");
+                        asyncIRCMessage(sender, "Incorrect syntax! Usage is: /msg " + cfg_data.ircName + " changepw <new_password>");
                     }
                     break;
                 case ".banwad":
@@ -1201,21 +1219,21 @@ public class Bot extends ListenerAdapter {
                     break;
                 case "register":
                     if (keywords.length == 2) {
-                        MySQL.registerAccount(hostname, keywords[1], sender);
+                        MySQL.registerAccount(user, keywords[1], sender);
                     } else {
-                        asyncIRCMessage(sender,"Incorrect syntax! Usage is: /msg " + cfg_data.ircName + " register <password>");
+                        asyncIRCMessage(sender, "Incorrect syntax! Usage is: /msg " + cfg_data.ircName + " register <password>");
                     }
                     break;
                 case ".send":
                     if (isAccountTypeOf(userLevel, ADMIN, MODERATOR)) {
-                        sendCommand(userLevel, keywords, hostname, sender);
+                        sendCommand(user, userLevel, keywords, sender);
                     }
                     break;
                 default:
                     break;
             }
         } else {
-            asyncIRCMessage(sender,"Your account is not logged in properly to the IRC network. Please log in and re-query.");
+            asyncIRCMessage(sender, "Your account is not logged in properly to the IRC network. Please log in and re-query.");
         }
     }
 

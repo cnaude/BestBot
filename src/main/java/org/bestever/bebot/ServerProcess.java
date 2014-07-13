@@ -341,7 +341,7 @@ public class ServerProcess extends Thread {
             if (server.auto_restart && server.port != 0) {
                 server.temp_port = server.port;
                 server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "Server crashed! Attempting to restart server...");
-                server.bot.processHost(server.user_level, server.bot.cfg_data.ircChannel, server.sender, server.irc_hostname, server.host_command, true, server.port);
+                server.bot.processHost(server.user_level, server.bot.cfg_data.ircChannel, server.sender, server.irc_nick, server.irc_login, server.ircHostmask, server.host_command, true, server.port);
             }
 
         } catch (IOException | NumberFormatException e) {

@@ -95,7 +95,9 @@ public class Server {
     /**
      * This is the host's hostname on irc
      */
-    public String irc_hostname;
+    public String ircHostmask;
+    
+    public String irc_nick;
 
     /**
      * This is the login name used
@@ -229,18 +231,20 @@ public class Server {
      * that will use a thread which processes them one by one from the queue to
      * prevent two servers attempting to use the same port at the same time
      *
+     * @param nick
+     * @param login
+     * @param hostmask
      * @param botReference The reference to the running bot
      * @param servers The LinkedList of servers for us to add on a server if
      * successful
      * @param channel The channel it was sent from
      * @param sender
-     * @param hostname The hostname of the sender
      * @param message The message sent
      * @param userLevel
      * @param autoRestart
      * @param port
      */
-    public static void handleHostCommand(Bot botReference, LinkedList<Server> servers, String channel, String sender, String hostname, String message, int userLevel, boolean autoRestart, int port) {
+    public static void handleHostCommand(String nick, String login, String hostmask, Bot botReference, LinkedList<Server> servers, String channel, String sender, String message, int userLevel, boolean autoRestart, int port) {
         // Initialize server without linking it to the ArrayList
         Server server = new Server();
 
@@ -259,7 +263,6 @@ public class Server {
 
         // Input basic values
         server.irc_channel = channel;
-        server.irc_hostname = hostname;
         server.host_command = message;
         server.user_level = userLevel;
         server.sender = sender;
@@ -442,7 +445,7 @@ public class Server {
         // Assign and start a new thread
         server.serverprocess = new ServerProcess(server);
         server.serverprocess.start();
-        MySQL.logServer(server.servername, server.server_id, Functions.getUserName(server.irc_hostname));
+        MySQL.logServer(server.servername, server.server_id, MySQL.getUserName(nick, login, hostmask));
     }
 
     /**
@@ -483,8 +486,9 @@ public class Server {
                     server.host_command = rs.getString("host_command");
                     server.instagib = (rs.getInt("instagib") == 1);
                     server.irc_channel = rs.getString("irc_channel");
-                    server.irc_hostname = rs.getString("irc_hostname");
+                    server.ircHostmask = rs.getString("irc_hostname");
                     server.irc_login = rs.getString("irc_login");
+                    server.irc_nick = rs.getString("irc_nick");
                     server.iwad = rs.getString("iwad");
                     server.mapwads = rs.getString("mapwads").replace(" ", "").split(","); // Check this!
                     // server.play_time = 0; // NOT IN THE DATABASE
