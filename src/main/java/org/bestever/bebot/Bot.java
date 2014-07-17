@@ -289,7 +289,9 @@ public class Bot extends ListenerAdapter {
     /**
      * Returns a list of servers belonging to the specified user
      *
-     * @param user
+     * @param nick
+     * @param login
+     * @param hostmask
      * @return a list of server objects
      */
     public List<Server> getUserServers(String nick, String login, String hostmask) {
@@ -309,7 +311,7 @@ public class Bot extends ListenerAdapter {
         }
         return serverList;
     }
-    
+
     /**
      * Returns a list of servers belonging to the specified user
      *
@@ -480,8 +482,10 @@ public class Bot extends ListenerAdapter {
     public void onMessage(MessageEvent event) {
         String message = event.getMessage();
         String channel = event.getChannel().getName();
-        String hostname = event.getUser().getHostmask();
-        String sender = event.getUser().getNick();
+        String hostmask = event.getUser().getHostmask();
+        String nick = event.getUser().getNick();
+        String login = event.getUser().getLogin();
+        User user = event.getUser();
         // Perform these only if the message starts with a period (to save processing time on trivial chat)
         if (event.getMessage().startsWith(".")) {
             // Generate an array of keywords from the message
@@ -497,8 +501,7 @@ public class Bot extends ListenerAdapter {
              }
              } */
             // Perform function based on input (note: login is handled by the MySQL function/class); also mostly in alphabetical order for convenience
-            int userLevel = MySQL.getLevel(hostname);
-            //int userLevel = ADMIN;
+            int userLevel = MySQL.getLevel(user);
             switch (keywords[0].toLowerCase()) {
                 case ".autorestart":
                     toggleAutoRestart(userLevel, keywords);
@@ -531,7 +534,7 @@ public class Bot extends ListenerAdapter {
                     }
                     break;
                 case ".host":
-                    processHost(event.getUser(), userLevel, channel, sender, message, false, getMinPort());
+                    processHost(event.getUser(), userLevel, channel, nick, message, false, getMinPort());
                     break;
                 case ".kill":
                     processKill(event.getUser(), userLevel, keywords);
@@ -549,7 +552,7 @@ public class Bot extends ListenerAdapter {
                     sendMessageToChannel("These wads are automatically loaded when a server is started: " + Functions.implode(cfg_data.bot_extra_wads, ", "));
                     break;
                 case ".load":
-                    MySQL.loadSlot(event.getUser(), keywords, userLevel, channel, sender);
+                    MySQL.loadSlot(event.getUser(), keywords, userLevel, channel, nick);
                     break;
                 case ".notice":
                     setNotice(keywords, userLevel);
@@ -595,7 +598,7 @@ public class Bot extends ListenerAdapter {
                     processServers(event.getUser());
                     break;
                 case ".slot":
-                    MySQL.showSlot(event.getUser(), hostname, keywords);
+                    MySQL.showSlot(event.getUser(), hostmask, keywords);
                     break;
                 case ".uptime":
                     if (keywords.length == 1) {
@@ -616,7 +619,7 @@ public class Bot extends ListenerAdapter {
     /**
      * Broadcasts the uptime of a specific server
      *
-     * @param port String - port numero
+     * @param port String - port number
      */
     public void calculateUptime(String port) {
         if (Functions.isNumeric(port)) {
@@ -770,11 +773,13 @@ public class Bot extends ListenerAdapter {
     /**
      * Passes the host command off to a static method to create the server
      *
-     * @param user
      * @param userLevel The user's bitmask level
      * @param channel IRC data associated with the sender
      * @param sender * @param hostname IRC data associated with the sender
+     * @param nick
      * @param message The entire message to be processed
+     * @param hostmask
+     * @param login
      * @param autoRestart
      * @param port
      */
@@ -791,13 +796,13 @@ public class Bot extends ListenerAdapter {
                     sendMessageToChannel("You have reached your server limit (" + slots + ")");
                 }
             } else {
-                sendMessageToChannel("You must register with BestEver and be logged in to IRC to use the bot to host!");
+                sendMessageToChannel("Sorry you are not registered!");
             }
         } else {
             sendMessageToChannel("The bot is currently disabled from hosting for the time being. Sorry for any inconvenience!");
         }
     }
-    
+
     /**
      * Passes the host command off to a static method to create the server
      *
@@ -1132,7 +1137,8 @@ public class Bot extends ListenerAdapter {
     }
 
     public boolean isValidUser(User user) {
-        return !MySQL.getUserName(user).isEmpty();
+        return true;
+        //return !MySQL.getUserName(user).isEmpty();
     }
 
     /**
@@ -1143,61 +1149,71 @@ public class Bot extends ListenerAdapter {
     @Override
     public void onPrivateMessage(PrivateMessageEvent event) {
         String message = event.getMessage();
-        String hostname = event.getUser().getHostmask();
-        String sender = event.getUser().getNick();
+        String nick = event.getUser().getNick();
         User user = event.getUser();
 
         // As of now, you can only perform commands if you are logged in, so we don't need an else here
         if (isValidUser(user)) {
             // Generate an array of keywords from the message (similar to onMessage)
             String[] keywords = message.split(" ");
-            int userLevel = MySQL.getLevel(hostname);
+            int userLevel = MySQL.getLevel(user);
             switch (keywords[0].toLowerCase()) {
                 case ".addban":
                     if (isAccountTypeOf(userLevel, MODERATOR, ADMIN) && keywords.length > 1) {
-                        MySQL.addBan(message.split(" ")[1], Functions.implode(Arrays.copyOfRange(message.split(" "), 2, message.split(" ").length), " "), sender);
+                        MySQL.addBan(message.split(" ")[1], Functions.implode(Arrays.copyOfRange(message.split(" "), 2, message.split(" ").length), " "), nick);
                     }
                     break;
                 case ".addstartwad":
                     if (isAccountTypeOf(userLevel, MODERATOR, ADMIN) && keywords.length > 1) {
-                        addExtraWad(Functions.implode(Arrays.copyOfRange(message.split(" "), 1, message.split(" ").length), " "), sender);
+                        addExtraWad(Functions.implode(Arrays.copyOfRange(message.split(" "), 1, message.split(" ").length), " "), nick);
                     }
                     break;
                 case ".delstartwad":
                     if (isAccountTypeOf(userLevel, MODERATOR, ADMIN) && keywords.length > 1) {
-                        deleteExtraWad(Functions.implode(Arrays.copyOfRange(message.split(" "), 1, message.split(" ").length), " "), sender);
+                        deleteExtraWad(Functions.implode(Arrays.copyOfRange(message.split(" "), 1, message.split(" ").length), " "), nick);
                     }
                     break;
                 case ".rcon":
-                    processRcon(user, userLevel, keywords, sender);
+                    processRcon(user, userLevel, keywords, nick);
                     break;
                 case "changepass":
                 case "changepassword":
                 case "changepw":
                     if (keywords.length == 2) {
-                        MySQL.changePassword(user, keywords[1], sender);
+                        MySQL.changePassword(user, keywords[1], nick);
                     } else {
-                        asyncIRCMessage(sender, "Incorrect syntax! Usage is: /msg " + cfg_data.ircName + " changepw <new_password>");
+                        asyncIRCMessage(nick, "Incorrect syntax! Usage is: /msg " + cfg_data.ircName + " changepw <new_password>");
+                    }
+                    break;
+                case "login":
+                    if (keywords.length > 2) {
+                        if (MySQL.userLogin(user, keywords[1], keywords[2])) {
+                            asyncCTCPMessage(nick, "Successfulled logged on.");
+                        } else {
+                            asyncCTCPMessage(nick, "Invalid username or password!");
+                        }
+                    } else {
+                        asyncIRCMessage(nick, "Incorrect syntax! Usage is: /msg " + cfg_data.ircName + " login <username> <password>");
                     }
                     break;
                 case ".banwad":
                     if (isAccountTypeOf(userLevel, MODERATOR, ADMIN)) {
-                        MySQL.addWadToBlacklist(Functions.implode(Arrays.copyOfRange(keywords, 1, keywords.length), " "), sender);
+                        MySQL.addWadToBlacklist(Functions.implode(Arrays.copyOfRange(keywords, 1, keywords.length), " "), nick);
                     }
                     break;
                 case ".unbanwad":
                     if (isAccountTypeOf(userLevel, MODERATOR, ADMIN)) {
-                        MySQL.removeWadFromBlacklist(Functions.implode(Arrays.copyOfRange(keywords, 1, keywords.length), " "), sender);
+                        MySQL.removeWadFromBlacklist(Functions.implode(Arrays.copyOfRange(keywords, 1, keywords.length), " "), nick);
                     }
                     break;
                 case ".delban":
                     if (isAccountTypeOf(userLevel, MODERATOR, ADMIN) && keywords.length > 1) {
-                        MySQL.delBan(message.split(" ")[1], sender);
+                        MySQL.delBan(message.split(" ")[1], nick);
                     }
                     break;
                 case ".msg":
                     if (isAccountTypeOf(userLevel, ADMIN, MODERATOR)) {
-                        messageChannel(keywords, sender);
+                        messageChannel(keywords, nick);
                     }
                     break;
                 case ".purgebans":
@@ -1218,22 +1234,22 @@ public class Bot extends ListenerAdapter {
                     }
                     break;
                 case "register":
-                    if (keywords.length == 2) {
-                        MySQL.registerAccount(user, keywords[1], sender);
+                    if (keywords.length > 2) {
+                        MySQL.registerAccount(user, keywords[1], keywords[2]);
                     } else {
-                        asyncIRCMessage(sender, "Incorrect syntax! Usage is: /msg " + cfg_data.ircName + " register <password>");
+                        asyncIRCMessage(nick, "Incorrect syntax! Usage is: /msg " + cfg_data.ircName + " register <username> <password>");
                     }
                     break;
                 case ".send":
                     if (isAccountTypeOf(userLevel, ADMIN, MODERATOR)) {
-                        sendCommand(user, userLevel, keywords, sender);
+                        sendCommand(user, userLevel, keywords, nick);
                     }
                     break;
                 default:
                     break;
             }
         } else {
-            asyncIRCMessage(sender, "Your account is not logged in properly to the IRC network. Please log in and re-query.");
+            asyncIRCMessage(nick, "Your account is not logged in properly to the IRC network. Please log in and re-query.");
         }
     }
 

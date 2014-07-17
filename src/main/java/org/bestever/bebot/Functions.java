@@ -163,6 +163,12 @@ public class Functions {
             String gUser = RegexGlobber.createRegexFromGlob(mask[0]);
             String gLogin = RegexGlobber.createRegexFromGlob(mask[1]);
             String gHost = RegexGlobber.createRegexFromGlob(mask[2]);
+            System.out.println("gUser: " + gUser);
+            System.out.println("gLogin: " + gLogin);
+            System.out.println("gHost: " + gHost);
+            System.out.println("rUser: " + user.getNick());
+            System.out.println("rLogin: " + user.getLogin());
+            System.out.println("rHost: " + user.getHostmask());
             return (user.getNick().matches(gUser)
                     && user.getLogin().matches(gLogin)
                     && user.getHostmask().matches(gHost));

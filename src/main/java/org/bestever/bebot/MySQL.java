@@ -16,6 +16,7 @@ package org.bestever.bebot;
 
 import java.net.UnknownHostException;
 import java.security.NoSuchAlgorithmException;
+import java.security.spec.InvalidKeySpecException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -28,6 +29,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.logging.Level;
 import static org.bestever.bebot.Logger.LOGLEVEL_CRITICAL;
 import static org.bestever.bebot.Logger.LOGLEVEL_IMPORTANT;
 import static org.bestever.bebot.Logger.LOGLEVEL_NORMAL;
@@ -176,6 +178,22 @@ public class MySQL {
             logMessage(LOGLEVEL_IMPORTANT, "Could not add wad page. (SQL Error)");
         }
         return null;
+    }
+    
+    public static void loadServers(Bot bot) {
+        String query = "SELECT `*` FROM `" + mysql_db + "`.`servers` WHERE `name` = ?";
+        try {
+            Connection con = getConnection();
+            PreparedStatement pst = con.prepareStatement(query);            
+            ResultSet r = pst.executeQuery();
+            while (r.next()) {
+                
+            }
+            
+        } catch (SQLException e) {
+
+            logMessage(LOGLEVEL_IMPORTANT, "Could not blacklist wad (SQL Error)");
+        }
     }
 
     /**
@@ -387,12 +405,12 @@ public class MySQL {
     }
 
     public static String getUserName(String nick, String login, String hostmask) {
-        String query = "SELECT * FROM " + mysql_db + ".`hostmasks`";
+        String query = "SELECT * FROM " + mysql_db + ".`usermasks`";
         try (Connection con = getConnection(); PreparedStatement pst = con.prepareStatement(query)) {            
             ResultSet r = pst.executeQuery();
             while (r.next()) {
-                if (Functions.checkUserMask(nick, login, hostmask, r.getString("hostmask"))) {
-                    return r.getString("name");
+                if (Functions.checkUserMask(nick, login, hostmask, r.getString("usermask"))) {
+                    return r.getString("username");
                 }
             }
         } catch (SQLException e) {
@@ -416,9 +434,11 @@ public class MySQL {
     public static int getMaxSlots(String nick, String login, String hostmask) {
         String query = "SELECT `server_limit` FROM " + mysql_db + ".`login` WHERE `username` = ?";
         try (Connection con = getConnection(); PreparedStatement pst = con.prepareStatement(query)) {
-            pst.setString(1, getUserName(nick, login, hostmask));
+            String username = getUserName(nick, login, hostmask);
+            pst.setString(1, username);
             ResultSet r = pst.executeQuery();
             if (r.next()) {
+                //System.out.println("[User: " + username + "] [server_limit: " + r.getInt("server_limit") + "]");
                 return r.getInt("server_limit");
             } else {
                 return 0;
@@ -429,59 +449,106 @@ public class MySQL {
         }
         return AccountType.GUEST; // Return 0, which is a guest and means it was not found; also returns this if not logged in
     }
+    
+    /**
+     * Check username and password against database and log user in. 
+     * Session remains active until user logs off.
+     * @param user
+     * @param username
+     * @param password
+     * @return 
+     */    
+    public static boolean userLogin(User user, String username, String password) {
+        String query = "SELECT `password`,`salt` FROM " + mysql_db + ".`login` WHERE `username` = ?";
+        try (Connection con = getConnection(); PreparedStatement pst = con.prepareStatement(query)) {            
+            pst.setString(1, username);
+            ResultSet r = pst.executeQuery();
+            if (r.next()) {                
+                try {                    
+                    return PasswordEncryptionService.authenticate(password, r.getBytes("password"), r.getBytes("salt"));
+                } catch (NoSuchAlgorithmException | InvalidKeySpecException ex) {
+                    java.util.logging.Logger.getLogger(MySQL.class.getName()).log(Level.SEVERE, null, ex);
+                }
+            } 
+        } catch (SQLException e) {
+            logMessage(LOGLEVEL_IMPORTANT, "SQL_ERROR in 'userLogin()': " + e.getMessage());
+        }
+        return false;
+    }
+    
+    /**
+     * Gets the maximum number of servers the user is allowed to host
+     *
+     * @param user
+     * @return server_limit Int - maximum server limit of the user
+     */
+    public static int getMaxSlots(User user) {
+        return getMaxSlots(user.getNick(), user.getLogin(), user.getHostmask());
+    }
 
     /**
      * Queries the database and returns the level of the user
      *
-     * @param hostname of the user
+     * @param user
      * @return level for success, 0 for fail, -1 for non-existent username
      */
-    public static int getLevel(String hostname) {
-        String query = "SELECT * FROM " + mysql_db + ".`hostmasks`";
+    public static int getLevel(User user) {
+        String query = "SELECT * FROM " + mysql_db + ".`usermasks`";
         try (Connection con = getConnection(); PreparedStatement pst = con.prepareStatement(query)) {
             ResultSet r = pst.executeQuery();
-            if (r.next()) {
-                return r.getInt("level");
-            } else {
-                return 0;
-            }
+            while (r.next()) {                
+                if (Functions.checkUserMask(user, r.getString("usermask"))) {                    
+                    return r.getInt("level");
+                }
+            } 
         } catch (SQLException e) {
-            logMessage(LOGLEVEL_IMPORTANT, "SQL_ERROR in 'getLevel()'");
-
+            logMessage(LOGLEVEL_IMPORTANT, "SQL_ERROR in 'getLevel()': " + e.getMessage());
         }
         return AccountType.GUEST; // Return 0, which is a guest and means it was not found; also returns this if not logged in
     }
-
+    
     /**
      * Inserts an account into the database (assuming the user is logged in to
      * IRC)
      *
      * @param user
+     * @param username
      * @param password password of the user
-     * @param sender
      */
-    public static void registerAccount(User user, String password, String sender) {
-        logMessage(LOGLEVEL_NORMAL, "Handling account registration from " + sender + ".");
-        // Query to check if the username already exists
+    public static void registerAccount(User user, String username, String password) {
+        logMessage(LOGLEVEL_NORMAL, "Handling account registration from " + user.getNick() + ".");
+        // Query to check if the username already exists     
+        
+        byte[] salt;
+        byte encPassword[];
+        try {
+            salt = PasswordEncryptionService.generateSalt();
+            encPassword = PasswordEncryptionService.getEncryptedPassword(password, salt);
+        } catch (NoSuchAlgorithmException | InvalidKeySpecException ex) {
+            java.util.logging.Logger.getLogger(MySQL.class.getName()).log(Level.SEVERE, null, ex);
+            return;
+        }
+        String sender = user.getNick();
+        
         String checkQuery = "SELECT `username` FROM " + mysql_db + ".`login` WHERE `username` = ?";
 
         // Query to add entry to database
-        String executeQuery = "INSERT INTO " + mysql_db + ".`login` ( `username`, `password`, `level`, `activated`, `server_limit`, `remember_token` ) VALUES ( ?, ?, 1, 1, 4, null )";
+        String executeQuery = "INSERT INTO " + mysql_db + ".`login` ( `username`, `password`, `salt`, `level`, `activated`, `server_limit`, `remember_token` ) VALUES ( ?, ?, ?, 1, 1, 4, null )";
         try (Connection con = getConnection(); PreparedStatement cs = con.prepareStatement(checkQuery); PreparedStatement xs = con.prepareStatement(executeQuery)) {
             // Query and check if see if the username exists
-            cs.setString(1, getUserName(user));
+            cs.setString(1, username);
             ResultSet r = cs.executeQuery();
 
             // The username already exists!
             if (r.next()) {
                 bot.blockingIRCMessage(sender, "Account already exists!");
-            } else {
-                // Prepare, bind & execute
-                xs.setString(1, getUserName(user));
-                // Hash the PW with BCrypt
-                xs.setString(2, BCrypt.hashpw(password, BCrypt.gensalt(14)));
+            } else {         
+                // Store username, encrypted password and salt
+                xs.setString(1, username);                
+                xs.setBytes(2, encPassword);
+                xs.setBytes(3, salt);
                 if (xs.executeUpdate() == 1) {
-                    bot.blockingIRCMessage(sender, "Account created! Your username is " + getUserName(user) + " and your password is " + password);
+                    bot.blockingIRCMessage(sender, "Account created! Your username is " + username + " and your password is " + password);
                 } else {
                     bot.blockingIRCMessage(sender, "There was an error registering your account.");
                 }
@@ -518,7 +585,7 @@ public class MySQL {
                 bot.blockingIRCMessage(sender, "Username does not exist.");
             } else {
                 // Prepare, bind & execute
-                xs.setString(1, BCrypt.hashpw(password, BCrypt.gensalt(14)));
+                xs.setString(1, "");
                 xs.setString(2, r.getString("username"));
                 if (xs.executeUpdate() == 1) {
                     bot.blockingIRCMessage(sender, "Successfully changed your password!");

@@ -18,7 +18,7 @@ public class AccountType {
 
     /**
      * Below are the bitmask permissions for userroups
-	 *
+     *
      */
     public static final int GUEST = 0; // 0
     public static final int REGISTERED = 1; // 1

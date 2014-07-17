@@ -92,7 +92,7 @@ public class ServerProcess extends Thread {
         // This must always be first (we may also want a custom binary, so do that here as well)
         serverRunCommands.add(server.executableType);
 
-		// Check if we have a temporary port
+        // Check if we have a temporary port
         // This will try to host the server on the same port as before
         if (server.temp_port != 0) {
             addParameter("-port", String.valueOf(server.temp_port));
@@ -107,7 +107,7 @@ public class ServerProcess extends Thread {
         String key = MySQL.createWadPage(Functions.implode(this.server.wads, ","));
 
         // Add the custom page to sv_website to avoid large wad list lookups
-        addParameter("+sv_website", "http://www.best-ever.org/wadpage?key=" + key);
+        addParameter("+sv_website", "http://cnaude.org/wadpage?key=" + key);
 
         if (server.iwad != null) {
             addParameter("-iwad", server.bot.cfg_data.bot_iwad_directory_path + server.iwad);
@@ -124,7 +124,7 @@ public class ServerProcess extends Thread {
         server.wads = Functions.removeDuplicateWads(server.wads);
 
         // Finally, add the wads
-        if (server.wads.size() > 0) {
+        if (!server.wads.isEmpty()) {
             for (String wad : server.wads) {
                 if (Server.isIwad(wad)) {
                     addParameter("-file", server.bot.cfg_data.bot_iwad_directory_path + wad);
@@ -250,7 +250,7 @@ public class ServerProcess extends Thread {
                 logFile.createNewFile();
             }
 
-			// Check if global RCON variable is set, or if the user has access to the RCON portion
+            // Check if global RCON variable is set, or if the user has access to the RCON portion
             // If either criteria is met, the user will be messaged the RCON password
             // NOTE: As of now, BE users can still check the RCON password by accessing the control panel on the website.
             // We'll fix this later by changing the RCON from the unique_id to a random MD5 hash
