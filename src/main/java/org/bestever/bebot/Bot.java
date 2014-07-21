@@ -1248,7 +1248,7 @@ public class Bot extends ListenerAdapter {
             case "login":
                 if (keywords.length > 2) {
                     if (MySQL.userLogin(user, keywords[1], keywords[2])) {
-                        asyncCTCPMessage(nick, "Successfulled logged on.");
+                        asyncCTCPMessage(nick, "Successfully logged on.");
                         addUserSession(user, keywords[1]);
                     } else {
                         asyncCTCPMessage(nick, "Invalid username or password!");

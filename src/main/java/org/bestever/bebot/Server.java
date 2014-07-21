@@ -96,12 +96,11 @@ public class Server {
      * Contains the entire ".host" command
      */
     public String host_command;
-    
+
     /**
      * Contains max players
      */
-   public int maxplayers = 8; 
-   
+    public int maxplayers = 8;
 
     /**
      * Contains the level of the user
@@ -150,13 +149,14 @@ public class Server {
      * Holds the skill of the game
      */
     public int skill = 5;
-    
-    /** Holds the frag limit
-     * 
+
+    /**
+     * Holds the frag limit
+     *
      */
     public int fraglimit = 15;
-    
-    /** 
+
+    /**
      * Holds the time limit
      */
     public int timelimit = 0;
@@ -170,6 +170,16 @@ public class Server {
      * If this is true, instagib will be enabled on the server
      */
     public boolean instagib;
+
+    /**
+     * Enable automatic map rotation
+     */
+    public boolean maprotation;
+
+    /**
+     * Enable random map rotation
+     */
+    public boolean randommaprotation;
 
     /**
      * If this is true, buckshot will be enabled on the server
@@ -343,6 +353,12 @@ public class Server {
                 case "instagib":
                     server.instagib = handleTrue(m.group(2));
                     break;
+                case "maprotation":
+                    server.maprotation = handleTrue(m.group(2));
+                    break;
+                case "randommaprotation":
+                    server.randommaprotation = handleTrue(m.group(2));
+                    break;
                 case "iwad":
                     server.iwad = getIwad(Functions.cleanInputFile(m.group(2)));
                     break;
@@ -385,7 +401,7 @@ public class Server {
                     break;
             }
         }
-        
+
         System.out.println("A1");
 
         // Check if the wads exist
@@ -415,7 +431,7 @@ public class Server {
                 }
             }
         }
-        
+
         System.out.println("A2");
 
         // Now that we've indexed the string, check to see if we have what we need to start a server
@@ -431,7 +447,7 @@ public class Server {
             bot.blockingIRCMessage(bot.cfg_data.ircChannel, "You are missing the hostname, or your hostname syntax is wrong. You can add it by appending: hostname=\"Your Server Name\"");
             return;
         }
-        
+
         System.out.println("A4");
 
         // Check if the global server limit has been reached
@@ -439,7 +455,7 @@ public class Server {
             bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Global server limit has been reached.");
             return;
         }
-        
+
         System.out.println("A5");
 
         // Generate the unique ID
@@ -456,7 +472,7 @@ public class Server {
         System.out.println("1");
         server.serverprocess.start();
         System.out.println("2");
-        
+
         MySQL.logServer(server.servername, server.server_id, username);
     }
 

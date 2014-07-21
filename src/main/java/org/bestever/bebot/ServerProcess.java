@@ -173,6 +173,14 @@ public class ServerProcess extends Thread {
         if (server.instagib) {
             addParameter("+instagib", "1");
         }
+        
+        if (server.randommaprotation) {
+            addParameter("+sv_randommaprotation", "1");
+        }
+        
+        if (server.maprotation) {
+            addParameter("+sv_maprotation", "1");
+        }
 
         if (server.buckshot) {
             addParameter("+buckshot", "1");
