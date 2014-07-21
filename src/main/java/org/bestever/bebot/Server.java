@@ -62,11 +62,6 @@ public class Server {
     public ServerProcess serverprocess;
 
     /**
-     * Contains the reference to the bot
-     */
-    public Bot bot;
-
-    /**
      * Contains the port it is run on
      */
     public int port;
@@ -93,21 +88,20 @@ public class Server {
     public String irc_channel;
 
     /**
-     * This is the host's hostname on irc
+     * The username that owns this server
      */
-    public String ircHostmask;
-    
-    public String irc_nick;
-
-    /**
-     * This is the login name used
-     */
-    public String irc_login;
+    public String username;
 
     /**
      * Contains the entire ".host" command
      */
     public String host_command;
+    
+    /**
+     * Contains max players
+     */
+   public int maxplayers = 8; 
+   
 
     /**
      * Contains the level of the user
@@ -156,6 +150,16 @@ public class Server {
      * Holds the skill of the game
      */
     public int skill = 5;
+    
+    /** Holds the frag limit
+     * 
+     */
+    public int fraglimit = 15;
+    
+    /** 
+     * Holds the time limit
+     */
+    public int timelimit = 0;
 
     /**
      * If this is true, that means skulltag data will be enabled
@@ -231,52 +235,32 @@ public class Server {
      * that will use a thread which processes them one by one from the queue to
      * prevent two servers attempting to use the same port at the same time
      *
-     * @param nick
-     * @param login
-     * @param hostmask
-     * @param botReference The reference to the running bot
+     * @param username
+     * @param bot The reference to the running bot
      * @param servers The LinkedList of servers for us to add on a server if
      * successful
-     * @param channel The channel it was sent from
      * @param sender
+     * @param channel
      * @param message The message sent
      * @param userLevel
      * @param autoRestart
      * @param port
      */
-    public static void handleHostCommand(String nick, String login, String hostmask, Bot botReference, LinkedList<Server> servers, String channel, String sender, String message, int userLevel, boolean autoRestart, int port) {
-        // Initialize server without linking it to the ArrayList
+    public static void handleHostCommand(String username, Bot bot, LinkedList<Server> servers, String sender, String channel, String message, int userLevel, boolean autoRestart, int port) {
         Server server = new Server();
-
-        // Reference server to bot
-        server.bot = botReference;
-
-        // Initialize the wad arraylist
         server.wads = new ArrayList<>();
-
-        // Check if autoRestart was enabled
-        if (autoRestart) {
-            server.auto_restart = true;
-        }
-
+        server.auto_restart = true;
         server.temp_port = port;
-
-        // Input basic values
+        server.sender = sender;
         server.irc_channel = channel;
+        server.username = username;
         server.host_command = message;
         server.user_level = userLevel;
-        server.sender = sender;
-
-		// The bot structure of using the executable has changed, we will set
-        // it to default here at the very beginning to the normal exe, but it
-        // can be changed later on in the code with a binary=... flag
-        server.executableType = botReference.cfg_data.bot_executable;
+        server.executableType = bot.cfg_data.bot_executable;
 
         // Regex that will match key=value, as well as quotes key="value"
         Pattern regex = Pattern.compile("(\\w+)=\"*((?<=\")[^\"]+(?=\")|([^\\s]+))\"*");
         Matcher m = regex.matcher(message);
-
-        // While we have a key=value
         while (m.find()) {
             switch (m.group(1).toLowerCase()) {
                 case "autorestart":
@@ -285,17 +269,16 @@ public class Server {
                 case "binary":
                     switch (m.group(2).toLowerCase()) {
                         case "zandronum":
-                            // If they specify the default, continue on like normal
                             break;
                         case "kpatch":
-                            server.executableType = botReference.cfg_data.bot_executable_kpatch;
+                            server.executableType = bot.cfg_data.bot_executable_kpatch;
                             break;
                         case "developer":
-                            server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "Important: Developer repositories may be completely broken, will not run, or have many bugs. Use at your own risk! If it keeps crashing, it's probably the repository and there is nothing we can do to solve that.");
-                            server.executableType = botReference.cfg_data.bot_executable_developerrepository;
+                            bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Important: Developer repositories may be completely broken, will not run, or have many bugs. Use at your own risk! If it keeps crashing, it's probably the repository and there is nothing we can do to solve that.");
+                            server.executableType = bot.cfg_data.bot_executable_developerrepository;
                             break;
                         default:
-                            server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "Invalid binary (" + m.group(2) + "); please use 'kpatch' or 'developer' to use custom binaries (ex: binary=kpatch), or remove it to use default Zandronum.");
+                            bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Invalid binary (" + m.group(2) + "); please use 'kpatch' or 'developer' to use custom binaries (ex: binary=kpatch), or remove it to use default Zandronum.");
                             return;
                     }
                     break;
@@ -305,20 +288,20 @@ public class Server {
                 case "compatflags":
                     server.compatflags = handleGameFlags(m.group(2));
                     if (server.compatflags == FLAGS_ERROR) {
-                        server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "Problem with parsing compatflags");
+                        bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Problem with parsing compatflags");
                         return;
                     }
                     break;
                 case "compatflags2":
                     server.compatflags2 = handleGameFlags(m.group(2));
                     if (server.compatflags == FLAGS_ERROR) {
-                        server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "Problem with parsing compatflags2");
+                        bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Problem with parsing compatflags2");
                         return;
                     }
                     break;
                 case "config":
-                    if (!server.checkConfig(server.bot.cfg_data.bot_cfg_directory_path + Functions.cleanInputFile(m.group(2).toLowerCase()))) {
-                        server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "Config file '" + m.group(2) + "' does not exist.");
+                    if (!server.checkConfig(bot.cfg_data.bot_cfg_directory_path + Functions.cleanInputFile(m.group(2).toLowerCase()))) {
+                        bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Config file '" + m.group(2) + "' does not exist.");
                         return;
                     }
                     server.config = Functions.cleanInputFile(m.group(2).toLowerCase());
@@ -330,23 +313,26 @@ public class Server {
                 case "dmflags":
                     server.dmflags = handleGameFlags(m.group(2));
                     if (server.dmflags == FLAGS_ERROR) {
-                        server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "Problem with parsing dmflags");
+                        bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Problem with parsing dmflags");
                         return;
                     }
                     break;
                 case "dmflags2":
                     server.dmflags2 = handleGameFlags(m.group(2));
                     if (server.dmflags2 == FLAGS_ERROR) {
-                        server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "Problem with parsing dmflags2");
+                        bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Problem with parsing dmflags2");
                         return;
                     }
                     break;
                 case "dmflags3":
                     server.dmflags3 = handleGameFlags(m.group(2));
                     if (server.dmflags3 == FLAGS_ERROR) {
-                        server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "Problem with parsing dmflags3");
+                        bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Problem with parsing dmflags3");
                         return;
                     }
+                    break;
+                case "fraglimit":
+                    server.fraglimit = Integer.valueOf(m.group(2));
                     break;
                 case "gamemode":
                     server.gamemode = getGamemode(m.group(2));
@@ -363,24 +349,30 @@ public class Server {
                 case "mapwad":
                     server.mapwads = addWads(m.group(2));
                     break;
+                case "maxplayers":
+                    server.maxplayers = Integer.valueOf(m.group(2));
+                    break;
                 case "port":
                     if (Functions.checkValidPort(m.group(2))) {
                         server.temp_port = Integer.valueOf(m.group(2));
                     } else {
-                        server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "You did not input a valid port.");
+                        bot.blockingIRCMessage(bot.cfg_data.ircChannel, "You did not input a valid port.");
                         return;
                     }
-                    if (server.checkPortExists(botReference, server.temp_port)) {
-                        server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "Port " + server.temp_port + " is already in use.");
+                    if (server.checkPortExists(bot, server.temp_port)) {
+                        bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Port " + server.temp_port + " is already in use.");
                         return;
                     }
                     break;
                 case "skill":
                     server.skill = handleSkill(m.group(2));
                     if (server.skill == -1) {
-                        server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "Skill must be between 0-4");
+                        bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Skill must be between 0-4");
                         return;
                     }
+                    break;
+                case "timelimit":
+                    server.timelimit = Integer.valueOf(m.group(2));
                     break;
                 case "wad":
                     String[] wadArray = addWads(m.group(2));
@@ -393,59 +385,79 @@ public class Server {
                     break;
             }
         }
+        
+        System.out.println("A1");
 
         // Check if the wads exist
         if (server.wads != null) {
+            System.out.println("B1");
             for (int i = 0; i < server.wads.size(); i++) {
+                System.out.println("B3: " + i);
                 if (server.wads.get(i).startsWith("iwad:")) {
-                    String tempWad = server.wads.get(i).split(":")[1];
-                    if (!Functions.fileExists(server.bot.cfg_data.bot_iwad_directory_path + tempWad)) {
-                        server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "File (iwad) '" + tempWad + "' does not exist!");
+                    System.out.println("B4: " + server.wads.get(i));
+                    String tempWad = server.wads.get(i).replace("iwad:", "");
+                    System.out.println("B5.1: " + tempWad);
+                    System.out.println("B5.2: " + bot.cfg_data.bot_iwad_directory_path);
+                    if (!Functions.fileExists(bot.cfg_data.bot_iwad_directory_path + tempWad)) {
+                        System.out.println("B6");
+                        bot.blockingIRCMessage(bot.cfg_data.ircChannel, "File (iwad) '" + tempWad + "' does not exist!");
+                        System.out.println("B7");
                         return;
-                    } // Replace iwad: since we don't need it
-                    else {
+                    } else {
+                        System.out.println("B8");
                         server.wads.set(i, tempWad);
                     }
-                } else if (!Functions.fileExists(server.bot.cfg_data.bot_wad_directory_path + server.wads.get(i))) {
-                    server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "File '" + server.wads.get(i) + "' does not exist!");
+                } else if (!Functions.fileExists(bot.cfg_data.bot_wad_directory_path + server.wads.get(i))) {
+                    System.out.println("B9");
+                    bot.blockingIRCMessage(bot.cfg_data.ircChannel, "File '" + server.wads.get(i) + "' does not exist!");
+                    System.out.println("B10");
                     return;
                 }
             }
         }
+        
+        System.out.println("A2");
 
         // Now that we've indexed the string, check to see if we have what we need to start a server
         if (server.iwad == null) {
-            server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "You are missing an iwad, or have specified an incorrect iwad. You can add it by appending: iwad=your_iwad");
+            bot.blockingIRCMessage(bot.cfg_data.ircChannel, "You are missing an iwad, or have specified an incorrect iwad. You can add it by appending: iwad=your_iwad");
             return;
         }
         if (server.gamemode == null) {
-            server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "You are missing the gamemode, or have specified an incorrect gamemode. You can add it by appending: gamemode=your_gamemode");
+            bot.blockingIRCMessage(bot.cfg_data.ircChannel, "You are missing the gamemode, or have specified an incorrect gamemode. You can add it by appending: gamemode=your_gamemode");
             return;
         }
         if (server.servername == null) {
-            server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "You are missing the hostname, or your hostname syntax is wrong. You can add it by appending: hostname=\"Your Server Name\"");
+            bot.blockingIRCMessage(bot.cfg_data.ircChannel, "You are missing the hostname, or your hostname syntax is wrong. You can add it by appending: hostname=\"Your Server Name\"");
             return;
         }
+        
+        System.out.println("A4");
 
         // Check if the global server limit has been reached
-        if (Functions.getFirstAvailablePort(server.bot.getMinPort(), server.bot.getMaxPort()) == 0) {
-            server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "Global server limit has been reached.");
+        if (Functions.getFirstAvailablePort(bot.getMinPort(), bot.getMaxPort()) == 0) {
+            bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Global server limit has been reached.");
             return;
         }
+        
+        System.out.println("A5");
 
         // Generate the unique ID
         try {
             server.server_id = Functions.generateHash();
         } catch (NoSuchAlgorithmException e) {
             logMessage(LOGLEVEL_CRITICAL, "Error generating MD5 hash!");
-            server.bot.blockingIRCMessage(server.bot.cfg_data.ircChannel, "Error generating MD5 hash. Please contact an administrator.");
+            bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Error generating MD5 hash. Please contact an administrator.");
             return;
         }
 
         // Assign and start a new thread
-        server.serverprocess = new ServerProcess(server);
+        server.serverprocess = new ServerProcess(server, bot);
+        System.out.println("1");
         server.serverprocess.start();
-        MySQL.logServer(server.servername, server.server_id, MySQL.getUserName(nick, login, hostmask));
+        System.out.println("2");
+        
+        MySQL.logServer(server.servername, server.server_id, username);
     }
 
     /**
@@ -473,7 +485,6 @@ public class Server {
                 if (rs.getInt("online") == SERVER_ONLINE) {
                     database_id = rs.getInt("id");
                     server = new Server(); // Reference a new object each time we run through the servers
-                    server.bot = bot;
                     server.buckshot = (rs.getInt("buckshot") == 1);
                     server.compatflags = rs.getInt("compatflags");
                     server.compatflags2 = rs.getInt("compatflags2");
@@ -486,14 +497,11 @@ public class Server {
                     server.host_command = rs.getString("host_command");
                     server.instagib = (rs.getInt("instagib") == 1);
                     server.irc_channel = rs.getString("irc_channel");
-                    server.ircHostmask = rs.getString("irc_hostname");
-                    server.irc_login = rs.getString("irc_login");
-                    server.irc_nick = rs.getString("irc_nick");
                     server.iwad = rs.getString("iwad");
                     server.mapwads = rs.getString("mapwads").replace(" ", "").split(","); // Check this!
                     // server.play_time = 0; // NOT IN THE DATABASE
                     server.rcon_password = rs.getString("rcon_password");
-                    server.sender = rs.getString("username"); // ???
+                    server.username = rs.getString("username"); // ???
                     server.server_id = rs.getString("unique_id"); // ???
                     server.servername = rs.getString("servername");
                     server.time_started = rs.getLong("time_started");
@@ -502,7 +510,7 @@ public class Server {
 
                     // Handle the server (pass it to the appropriate places before referencing a new object) (server.port and server.serverprocess)
                     logMessage(LOGLEVEL_NORMAL, "Successfully processed server id " + database_id + "'s data.");
-                    server.serverprocess = new ServerProcess(server);
+                    server.serverprocess = new ServerProcess(server, bot);
                     server.serverprocess.start();
                 }
             }

@@ -44,6 +44,15 @@ public class Logger {
     }
 
     /**
+     * Sets up the path to the log file
+     *
+     * @param loglevel
+     */
+    public static void setLogLevel(int loglevel) {
+        Logger.log_level = loglevel;
+    }
+
+    /**
      * Writes a log message based on the log level
      *
      * @param logLevel int - severity of the message

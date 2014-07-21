@@ -297,6 +297,7 @@ public class Functions {
      * @return true if exists, false if not
      */
     public static boolean fileExists(String file) {
+        System.out.println("FILE: " + file);
         File f = new File(file);
         return f.exists();
     }

@@ -175,21 +175,21 @@ public class MySQL {
             } catch (NoSuchAlgorithmException e) {
             }
         } catch (SQLException e) {
-            logMessage(LOGLEVEL_IMPORTANT, "Could not add wad page. (SQL Error)");
+            logMessage(LOGLEVEL_IMPORTANT, "Could not add wad page. (SQL Error): " + e.getMessage());
         }
         return null;
     }
-    
+
     public static void loadServers(Bot bot) {
         String query = "SELECT `*` FROM `" + mysql_db + "`.`servers` WHERE `name` = ?";
         try {
             Connection con = getConnection();
-            PreparedStatement pst = con.prepareStatement(query);            
+            PreparedStatement pst = con.prepareStatement(query);
             ResultSet r = pst.executeQuery();
             while (r.next()) {
-                
+
             }
-            
+
         } catch (SQLException e) {
 
             logMessage(LOGLEVEL_IMPORTANT, "Could not blacklist wad (SQL Error)");
@@ -404,109 +404,73 @@ public class MySQL {
         }
     }
 
-    public static String getUserName(String nick, String login, String hostmask) {
-        String query = "SELECT * FROM " + mysql_db + ".`usermasks`";
-        try (Connection con = getConnection(); PreparedStatement pst = con.prepareStatement(query)) {            
-            ResultSet r = pst.executeQuery();
-            while (r.next()) {
-                if (Functions.checkUserMask(nick, login, hostmask, r.getString("usermask"))) {
-                    return r.getString("username");
-                }
-            }
-        } catch (SQLException e) {
-            logMessage(LOGLEVEL_IMPORTANT, "SQL_ERROR in 'getUserName()'");
-        }
-        return "";
-    }
-    
-    public static String getUserName(User user) {
-        return getUserName(user.getNick(), user.getLogin(), user.getHostmask());
-    }
-
     /**
      * Gets the maximum number of servers the user is allowed to host
      *
-     * @param nick
-     * @param login
-     * @param hostmask
+     * @param username
      * @return server_limit Int - maximum server limit of the user
      */
-    public static int getMaxSlots(String nick, String login, String hostmask) {
+    public static int getMaxSlots(String username) {
         String query = "SELECT `server_limit` FROM " + mysql_db + ".`login` WHERE `username` = ?";
         try (Connection con = getConnection(); PreparedStatement pst = con.prepareStatement(query)) {
-            String username = getUserName(nick, login, hostmask);
             pst.setString(1, username);
             ResultSet r = pst.executeQuery();
             if (r.next()) {
-                //System.out.println("[User: " + username + "] [server_limit: " + r.getInt("server_limit") + "]");
                 return r.getInt("server_limit");
-            } else {
-                return 0;
-            }
+            } 
         } catch (SQLException e) {
             logMessage(LOGLEVEL_IMPORTANT, "SQL_ERROR in 'getMaxSlots()'");
-
         }
         return AccountType.GUEST; // Return 0, which is a guest and means it was not found; also returns this if not logged in
     }
-    
+
     /**
-     * Check username and password against database and log user in. 
-     * Session remains active until user logs off.
+     * Check username and password against database and log user in. Session
+     * remains active until user logs off.
+     *
      * @param user
      * @param username
      * @param password
-     * @return 
-     */    
+     * @return
+     */
     public static boolean userLogin(User user, String username, String password) {
         String query = "SELECT `password`,`salt` FROM " + mysql_db + ".`login` WHERE `username` = ?";
-        try (Connection con = getConnection(); PreparedStatement pst = con.prepareStatement(query)) {            
+        try (Connection con = getConnection(); PreparedStatement pst = con.prepareStatement(query)) {
             pst.setString(1, username);
             ResultSet r = pst.executeQuery();
-            if (r.next()) {                
-                try {                    
+            if (r.next()) {
+                try {
                     return PasswordEncryptionService.authenticate(password, r.getBytes("password"), r.getBytes("salt"));
                 } catch (NoSuchAlgorithmException | InvalidKeySpecException ex) {
                     java.util.logging.Logger.getLogger(MySQL.class.getName()).log(Level.SEVERE, null, ex);
                 }
-            } 
+            }
         } catch (SQLException e) {
             logMessage(LOGLEVEL_IMPORTANT, "SQL_ERROR in 'userLogin()': " + e.getMessage());
         }
         return false;
     }
-    
-    /**
-     * Gets the maximum number of servers the user is allowed to host
-     *
-     * @param user
-     * @return server_limit Int - maximum server limit of the user
-     */
-    public static int getMaxSlots(User user) {
-        return getMaxSlots(user.getNick(), user.getLogin(), user.getHostmask());
-    }
 
     /**
      * Queries the database and returns the level of the user
      *
-     * @param user
+     * @param username
      * @return level for success, 0 for fail, -1 for non-existent username
      */
-    public static int getLevel(User user) {
-        String query = "SELECT * FROM " + mysql_db + ".`usermasks`";
+    public static int getLevel(String username) {
+        String query = "SELECT `level` FROM " + mysql_db + ".`login` WHERE `username` = ?";
         try (Connection con = getConnection(); PreparedStatement pst = con.prepareStatement(query)) {
+            pst.setString(1, username);
             ResultSet r = pst.executeQuery();
-            while (r.next()) {                
-                if (Functions.checkUserMask(user, r.getString("usermask"))) {                    
-                    return r.getInt("level");
-                }
-            } 
+            if (r.next()) {
+                return r.getInt("level");
+            }
         } catch (SQLException e) {
             logMessage(LOGLEVEL_IMPORTANT, "SQL_ERROR in 'getLevel()': " + e.getMessage());
         }
         return AccountType.GUEST; // Return 0, which is a guest and means it was not found; also returns this if not logged in
     }
-    
+
     /**
      * Inserts an account into the database (assuming the user is logged in to
      * IRC)
@@ -518,7 +482,7 @@ public class MySQL {
     public static void registerAccount(User user, String username, String password) {
         logMessage(LOGLEVEL_NORMAL, "Handling account registration from " + user.getNick() + ".");
         // Query to check if the username already exists     
-        
+
         byte[] salt;
         byte encPassword[];
         try {
@@ -529,7 +493,7 @@ public class MySQL {
             return;
         }
         String sender = user.getNick();
-        
+
         String checkQuery = "SELECT `username` FROM " + mysql_db + ".`login` WHERE `username` = ?";
 
         // Query to add entry to database
@@ -542,9 +506,9 @@ public class MySQL {
             // The username already exists!
             if (r.next()) {
                 bot.blockingIRCMessage(sender, "Account already exists!");
-            } else {         
+            } else {
                 // Store username, encrypted password and salt
-                xs.setString(1, username);                
+                xs.setString(1, username);
                 xs.setBytes(2, encPassword);
                 xs.setBytes(3, salt);
                 if (xs.executeUpdate() == 1) {
@@ -577,14 +541,12 @@ public class MySQL {
         String executeQuery = "UPDATE " + mysql_db + ".`login` SET `password` = ? WHERE `username` = ?";
         try (Connection con = getConnection(); PreparedStatement cs = con.prepareStatement(checkQuery); PreparedStatement xs = con.prepareStatement(executeQuery)) {
             // Query and check if see if the username exists
-            cs.setString(1, getUserName(user));
+            cs.setString(1, Bot.getUserName(user));
             ResultSet r = cs.executeQuery();
 
-            // The username doesn't exist!
             if (!r.next()) {
                 bot.blockingIRCMessage(sender, "Username does not exist.");
             } else {
-                // Prepare, bind & execute
                 xs.setString(1, "");
                 xs.setString(2, r.getString("username"));
                 if (xs.executeUpdate() == 1) {
@@ -604,10 +566,10 @@ public class MySQL {
     /**
      * Saves a server host command to a row
      *
-     * @param user
+     * @param username
      * @param words String Array - array of words
      */
-    public static void saveSlot(User user, String[] words) {
+    public static void saveSlot(String username, String[] words) {
         if (words.length > 2) {
             String hostmessage = Functions.implode(Arrays.copyOfRange(words, 2, words.length), " ");
             if ((words.length > 2) && (Functions.isNumeric(words[1]))) {
@@ -617,7 +579,7 @@ public class MySQL {
                         String query = "SELECT `slot` FROM " + mysql_db + ".`save` WHERE `slot` = ? && `username` = ?";
                         PreparedStatement pst = con.prepareStatement(query);
                         pst.setInt(1, slot);
-                        pst.setString(2, getUserName(user));
+                        pst.setString(2, username);
                         try (ResultSet rs = pst.executeQuery()) {
                             boolean empty = true;
                             while (rs.next()) {
@@ -631,7 +593,7 @@ public class MySQL {
                             pst = con.prepareStatement(query);
                             pst.setString(1, hostmessage);
                             pst.setInt(2, slot);
-                            pst.setString(3, getUserName(user));
+                            pst.setString(3, username);
                             pst.executeUpdate();
                         }
                         bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Successfully updated save list.");
@@ -651,13 +613,13 @@ public class MySQL {
     /**
      * Loads server saved with the .save command
      *
-     * @param user
+     * @param username
      * @param words String[] - their message
      * @param level Int - their user level
      * @param channel String - the channel
      * @param sender String - sender's name
      */
-    public static void loadSlot(User user, String[] words, int level, String channel, String sender) {
+    public static void loadSlot(String username, String[] words, int level, String channel, String sender) {
         if (words.length == 2) {
             if (Functions.isNumeric(words[1])) {
                 int slot = Integer.parseInt(words[1]);
@@ -669,17 +631,16 @@ public class MySQL {
                     String query = "SELECT `serverstring` FROM " + mysql_db + ".`save` WHERE `slot` = ? && `username` = ?";
                     PreparedStatement pst = con.prepareStatement(query);
                     pst.setInt(1, slot);
-                    pst.setString(2, getUserName(user));
+                    pst.setString(2, username);
                     ResultSet r = pst.executeQuery();
                     if (r.next()) {
                         String hostCommand = r.getString("serverstring");
-                        bot.processHost(user, level, channel, sender, hostCommand, false, bot.getMinPort());
+                        bot.processHost(username, level, sender, channel, hostCommand, false, bot.getMinPort());
                     } else {
                         bot.blockingIRCMessage(bot.cfg_data.ircChannel, "You do not have anything saved to that slot!");
                     }
                 } catch (SQLException e) {
                     Logger.logMessage(LOGLEVEL_IMPORTANT, "SQL Error in 'loadSlot()'");
-
                 }
             }
         } else {
@@ -695,6 +656,9 @@ public class MySQL {
      * @param username String - username of server host
      */
     public static void logServer(String servername, String unique_id, String username) {
+        System.out.println("servername: " + servername);
+        System.out.println("unique_id: " + unique_id);
+        System.out.println("username: " + username);
         String query = "INSERT INTO `" + mysql_db + "`.`serverlog` (`unique_id`, `servername`, `username`, `date`) VALUES (?, ?, ?, NOW())";
         try (Connection con = getConnection(); PreparedStatement pst = con.prepareStatement(query)) {
             pst.setString(1, unique_id);
@@ -711,11 +675,11 @@ public class MySQL {
     /**
      * Shows a server host string saved with the .save command
      *
-     * @param user
+     * @param username
      * @param hostname String - the user's hostname
      * @param words String[] - array of words of message
      */
-    public static void showSlot(User user, String hostname, String[] words) {
+    public static void showSlot(String username, String hostname, String[] words) {
         if (words.length == 2) {
             if (Functions.isNumeric(words[1])) {
                 int slot = Integer.parseInt(words[1]);
@@ -723,7 +687,7 @@ public class MySQL {
                     String query = "SELECT `serverstring`,`slot` FROM `server`.`save` WHERE `slot` = ? && `username` = ?";
                     try (Connection con = getConnection(); PreparedStatement pst = con.prepareStatement(query)) {
                         pst.setInt(1, slot);
-                        pst.setString(2, getUserName(user));
+                        pst.setString(2, username);
                         ResultSet rs = pst.executeQuery();
                         if (rs.next()) {
                             bot.blockingIRCMessage(bot.cfg_data.ircChannel, "In slot " + rs.getString("slot") + ": " + rs.getString("serverstring"));

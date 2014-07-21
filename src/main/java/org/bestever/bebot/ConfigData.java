@@ -158,6 +158,16 @@ public class ConfigData {
      * Log file directory
      */
     public String bot_logfiledir;
+    
+    /** 
+     * Bot log level
+     */
+    public int bot_loglevel;
+    
+    /**
+     * The URL for wad file downloader
+     */
+    public String bot_wad_url;
 
     /**
      * Contains the file name of the executable, in linux this would be
@@ -296,6 +306,8 @@ public class ConfigData {
         Ini.Section bot = ini.get("bot");
         this.bot_accountfile = bot.get("accountfile");
         this.bot_logfile = bot.get("logfile");
+        this.bot_wad_url = bot.get("wad_page");
+        this.bot_loglevel = Integer.parseInt(bot.get("loglevel"));
         this.bot_max_port = Integer.parseInt(bot.get("max_port"));
         this.bot_min_port = Integer.parseInt(bot.get("min_port"));
         this.bot_verbose = Boolean.parseBoolean(bot.get("verbose"));
@@ -324,8 +336,9 @@ public class ConfigData {
         if (bot.get("notice_interval") != null) {
             this.bot_notice_interval = Integer.parseInt(bot.get("notice_interval"));
         }
+        this.bot_extra_wads = new ArrayList<>();
         if (bot.get("extra_wads") != null) {
-            this.bot_extra_wads = new ArrayList<>(getExtraWads(bot.get("extra_wads")));
+            this.bot_extra_wads.addAll(getExtraWads(bot.get("extra_wads")));
         }
         
     }

@@ -9,9 +9,9 @@
     </properties>
 
     <groupId>com.cnaude</groupId>
-    <artifactId>BestBot</artifactId>
+    <artifactId>DoomBot</artifactId>
     <version>0.1-${build.number}</version>
-    <name>BestBot</name>
+    <name>DoomBot</name>
     <description>A Zandrom IRC bot.</description>
     <url>http://cnaude.org</url>
 
