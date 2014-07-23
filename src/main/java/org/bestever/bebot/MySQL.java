@@ -30,6 +30,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.logging.Level;
+import static org.bestever.bebot.Bot.genUserKey;
 import static org.bestever.bebot.Logger.LOGLEVEL_CRITICAL;
 import static org.bestever.bebot.Logger.LOGLEVEL_IMPORTANT;
 import static org.bestever.bebot.Logger.LOGLEVEL_NORMAL;
@@ -291,7 +292,7 @@ public class MySQL {
                     blacklistedHashes.beforeFirst();
                     while (blacklistedHashes.next()) {
                         if (blacklistedHashes.getString("md5").equalsIgnoreCase(checkHashes.getString("md5"))) {
-                            bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Wad " + checkHashes.getString("wadname")
+                            bot.sendMessageToChannel("Wad " + checkHashes.getString("wadname")
                                     + " matches blacklist " + blacklistedHashes.getString("name") + " (hash: " + blacklistedHashes.getString("md5") + ")");
                             return false;
                         }
@@ -417,7 +418,7 @@ public class MySQL {
             ResultSet r = pst.executeQuery();
             if (r.next()) {
                 return r.getInt("server_limit");
-            } 
+            }
         } catch (SQLException e) {
             logMessage(LOGLEVEL_IMPORTANT, "SQL_ERROR in 'getMaxSlots()'");
         }
@@ -566,16 +567,20 @@ public class MySQL {
     /**
      * Saves a server host command to a row
      *
-     * @param username
+     * @param user
      * @param words String Array - array of words
      */
-    public static void saveSlot(String username, String[] words) {
+    public static void saveSlot(User user, String[] words) {
+        if (!isLoggedIn(user)) {
+            return;
+        }
         if (words.length > 2) {
             String hostmessage = Functions.implode(Arrays.copyOfRange(words, 2, words.length), " ");
             if ((words.length > 2) && (Functions.isNumeric(words[1]))) {
                 int slot = Integer.parseInt(words[1]);
                 if (slot > 0 && slot < 11) {
                     try (Connection con = getConnection()) {
+                        String username = Bot.getUserName(user);
                         String query = "SELECT `slot` FROM " + mysql_db + ".`save` WHERE `slot` = ? && `username` = ?";
                         PreparedStatement pst = con.prepareStatement(query);
                         pst.setInt(1, slot);
@@ -596,17 +601,17 @@ public class MySQL {
                             pst.setString(3, username);
                             pst.executeUpdate();
                         }
-                        bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Successfully updated save list.");
+                        bot.sendMessageToChannel("Successfully updated save list.");
                     } catch (SQLException e) {
                         logMessage(LOGLEVEL_IMPORTANT, "SQL Error in 'saveSlot()'");
 
                     }
                 } else {
-                    bot.blockingIRCMessage(bot.cfg_data.ircChannel, "You may only specify slot 1 to 10.");
+                    bot.sendMessageToChannel("You may only specify slot 1 to 10.");
                 }
             }
         } else {
-            bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Incorrect syntax! Correct usage is .save 1-10 <host_message>");
+            bot.sendMessageToChannel("Incorrect syntax! Correct usage is .save 1-10 <host_message>");
         }
     }
 
@@ -624,7 +629,7 @@ public class MySQL {
             if (Functions.isNumeric(words[1])) {
                 int slot = Integer.parseInt(words[1]);
                 if (slot > 10 || slot < 1) {
-                    bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Slot must be between 1 and 10.");
+                    bot.sendMessageToChannel("Slot must be between 1 and 10.");
                     return;
                 }
                 try (Connection con = getConnection()) {
@@ -637,14 +642,63 @@ public class MySQL {
                         String hostCommand = r.getString("serverstring");
                         bot.processHost(username, level, sender, channel, hostCommand, false, bot.getMinPort());
                     } else {
-                        bot.blockingIRCMessage(bot.cfg_data.ircChannel, "You do not have anything saved to that slot!");
+                        bot.sendMessageToChannel("You do not have anything saved to that slot!");
                     }
                 } catch (SQLException e) {
                     Logger.logMessage(LOGLEVEL_IMPORTANT, "SQL Error in 'loadSlot()'");
                 }
             }
         } else {
-            bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Incorrect syntax! Correct syntax is .load 1 to 10");
+            bot.sendMessageToChannel("Incorrect syntax! Correct syntax is .load 1 to 10");
+        }
+    }
+
+    /**
+     * Saves a user session
+     *
+     * @param usermask
+     * @param username
+     */
+    public static void saveSession(String usermask, String username) {
+        try (Connection con = getConnection()) {
+            String query = "SELECT `usermask` FROM " + mysql_db + ".`sessions` WHERE `usermask` = ?";
+            PreparedStatement pst = con.prepareStatement(query);
+            pst.setString(1, usermask);
+            try (ResultSet rs = pst.executeQuery()) {
+                if (rs.next()) {
+                    query = "UPDATE " + mysql_db + ".`sessions` SET `username` = ? WHERE `usermask` = ?";
+                } else {
+                    query = "INSERT INTO " + mysql_db + ".`sessions` (`username`, `usermask`) VALUES (?, ?)";
+                }
+                pst = con.prepareStatement(query);
+                pst.setString(1, username);
+                pst.setString(2, usermask);
+                pst.executeUpdate();
+            }
+        } catch (SQLException e) {
+            logMessage(LOGLEVEL_IMPORTANT, "SQL Error in 'saveSession()': " + e.getMessage());
+        }
+
+    }
+
+    /**
+     * Loads persistent login sessions from database
+     *
+     */
+    public static void loadSessions() {
+        try (Connection con = getConnection()) {
+            String query = "SELECT `usermask`,`username` FROM " + mysql_db + ".`sessions`";
+            try (PreparedStatement pst = con.prepareStatement(query)) {
+                ResultSet r = pst.executeQuery();
+                while (r.next()) {
+                    Bot.addUserSession(r.getString("usermask"), r.getString("username"));
+                }
+                pst.close();
+                con.close();
+            }
+            con.close();
+        } catch (SQLException e) {
+            Logger.logMessage(LOGLEVEL_IMPORTANT, "SQL Error in 'loadSessions()': " + e.getMessage());
         }
     }
 
@@ -666,46 +720,59 @@ public class MySQL {
             pst.setString(3, username);
             pst.executeUpdate();
             pst.close();
+            con.close();
         } catch (SQLException e) {
             Logger.logMessage(LOGLEVEL_IMPORTANT, "SQL Exception in logServer()");
 
         }
     }
-
+    
+    public static boolean isLoggedIn(User user) {
+        if (!bot.isValidUser(user)) {
+            bot.sendMessageToChannel("You are not logged in!");
+            return false;
+        }
+        return true;
+    }
+    
     /**
      * Shows a server host string saved with the .save command
      *
-     * @param username
-     * @param hostname String - the user's hostname
-     * @param words String[] - array of words of message
+     * @param user
+     * @param keywords String[] - array of words of message
      */
-    public static void showSlot(String username, String hostname, String[] words) {
-        if (words.length == 2) {
-            if (Functions.isNumeric(words[1])) {
-                int slot = Integer.parseInt(words[1]);
+    public static void showSlot(User user, String[] keywords) {
+        if (!isLoggedIn(user)) {
+            return;
+        }
+        if (keywords.length == 2) {
+            if (Functions.isNumeric(keywords[1])) {
+                int slot = Integer.parseInt(keywords[1]);
                 if (slot > 0 && slot < 11) {
-                    String query = "SELECT `serverstring`,`slot` FROM `server`.`save` WHERE `slot` = ? && `username` = ?";
+                    String username = Bot.getUserName(user);
+                    String query = "SELECT `serverstring`,`slot` FROM `save` WHERE `slot` = ? && `username` = ?";
                     try (Connection con = getConnection(); PreparedStatement pst = con.prepareStatement(query)) {
                         pst.setInt(1, slot);
                         pst.setString(2, username);
                         ResultSet rs = pst.executeQuery();
                         if (rs.next()) {
-                            bot.blockingIRCMessage(bot.cfg_data.ircChannel, "In slot " + rs.getString("slot") + ": " + rs.getString("serverstring"));
+                            bot.sendMessageToChannel("Slot " + rs.getString("slot") + ": " + rs.getString("serverstring"));
                         } else {
-                            bot.blockingIRCMessage(bot.cfg_data.ircChannel, "You do not have anything saved to that slot!");
+                            bot.sendMessageToChannel("You do not have anything saved to that slot!");
                         }
+                        pst.close();
+                        con.close();
                     } catch (SQLException e) {
-                        Logger.logMessage(LOGLEVEL_IMPORTANT, "SQL Error in showSlot()");
-
+                        Logger.logMessage(LOGLEVEL_IMPORTANT, "SQL Error in showSlot(): " + e.getMessage());
                     }
                 } else {
-                    bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Slot must be between 1 and 10!");
+                    bot.sendMessageToChannel("Slot must be between 1 and 10!");
                 }
             } else {
-                bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Slot must be a number.");
+                bot.sendMessageToChannel("Slot must be a number.");
             }
         } else {
-            bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Incorrect syntax! Correct usage is .load <slot>");
+            bot.sendMessageToChannel("Incorrect syntax! Correct usage is .load <slot>");
         }
     }
 

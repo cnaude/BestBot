@@ -14,13 +14,16 @@
 // --------------------------------------------------------------------------
 package org.bestever.bebot;
 
+import com.google.common.base.Joiner;
 import java.io.File;
 import java.io.PrintWriter;
 import java.security.NoSuchAlgorithmException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.text.Collator;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -232,6 +235,11 @@ public class Server {
     public static final long DAY_MILLISECONDS = 1000 * 60 * 60 * 24;
 
     /**
+     * Active player list
+     */
+    public ArrayList<String> playerList;
+
+    /**
      * Default constructor for building a server
      */
     public Server() {
@@ -284,11 +292,11 @@ public class Server {
                             server.executableType = bot.cfg_data.bot_executable_kpatch;
                             break;
                         case "developer":
-                            bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Important: Developer repositories may be completely broken, will not run, or have many bugs. Use at your own risk! If it keeps crashing, it's probably the repository and there is nothing we can do to solve that.");
+                            bot.sendMessageToChannel("Important: Developer repositories may be completely broken, will not run, or have many bugs. Use at your own risk! If it keeps crashing, it's probably the repository and there is nothing we can do to solve that.");
                             server.executableType = bot.cfg_data.bot_executable_developerrepository;
                             break;
                         default:
-                            bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Invalid binary (" + m.group(2) + "); please use 'kpatch' or 'developer' to use custom binaries (ex: binary=kpatch), or remove it to use default Zandronum.");
+                            bot.sendMessageToChannel("Invalid binary (" + m.group(2) + "); please use 'kpatch' or 'developer' to use custom binaries (ex: binary=kpatch), or remove it to use default Zandronum.");
                             return;
                     }
                     break;
@@ -298,20 +306,20 @@ public class Server {
                 case "compatflags":
                     server.compatflags = handleGameFlags(m.group(2));
                     if (server.compatflags == FLAGS_ERROR) {
-                        bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Problem with parsing compatflags");
+                        bot.sendMessageToChannel("Problem with parsing compatflags");
                         return;
                     }
                     break;
                 case "compatflags2":
                     server.compatflags2 = handleGameFlags(m.group(2));
                     if (server.compatflags == FLAGS_ERROR) {
-                        bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Problem with parsing compatflags2");
+                        bot.sendMessageToChannel("Problem with parsing compatflags2");
                         return;
                     }
                     break;
                 case "config":
                     if (!server.checkConfig(bot.cfg_data.bot_cfg_directory_path + Functions.cleanInputFile(m.group(2).toLowerCase()))) {
-                        bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Config file '" + m.group(2) + "' does not exist.");
+                        bot.sendMessageToChannel("Config file '" + m.group(2) + "' does not exist.");
                         return;
                     }
                     server.config = Functions.cleanInputFile(m.group(2).toLowerCase());
@@ -323,21 +331,21 @@ public class Server {
                 case "dmflags":
                     server.dmflags = handleGameFlags(m.group(2));
                     if (server.dmflags == FLAGS_ERROR) {
-                        bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Problem with parsing dmflags");
+                        bot.sendMessageToChannel("Problem with parsing dmflags");
                         return;
                     }
                     break;
                 case "dmflags2":
                     server.dmflags2 = handleGameFlags(m.group(2));
                     if (server.dmflags2 == FLAGS_ERROR) {
-                        bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Problem with parsing dmflags2");
+                        bot.sendMessageToChannel("Problem with parsing dmflags2");
                         return;
                     }
                     break;
                 case "dmflags3":
                     server.dmflags3 = handleGameFlags(m.group(2));
                     if (server.dmflags3 == FLAGS_ERROR) {
-                        bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Problem with parsing dmflags3");
+                        bot.sendMessageToChannel("Problem with parsing dmflags3");
                         return;
                     }
                     break;
@@ -372,18 +380,18 @@ public class Server {
                     if (Functions.checkValidPort(m.group(2))) {
                         server.temp_port = Integer.valueOf(m.group(2));
                     } else {
-                        bot.blockingIRCMessage(bot.cfg_data.ircChannel, "You did not input a valid port.");
+                        bot.sendMessageToChannel("You did not input a valid port.");
                         return;
                     }
                     if (server.checkPortExists(bot, server.temp_port)) {
-                        bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Port " + server.temp_port + " is already in use.");
+                        bot.sendMessageToChannel("Port " + server.temp_port + " is already in use.");
                         return;
                     }
                     break;
                 case "skill":
                     server.skill = handleSkill(m.group(2));
                     if (server.skill == -1) {
-                        bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Skill must be between 0-4");
+                        bot.sendMessageToChannel("Skill must be between 0-4");
                         return;
                     }
                     break;
@@ -406,64 +414,47 @@ public class Server {
 
         // Check if the wads exist
         if (server.wads != null) {
-            System.out.println("B1");
             for (int i = 0; i < server.wads.size(); i++) {
-                System.out.println("B3: " + i);
                 if (server.wads.get(i).startsWith("iwad:")) {
-                    System.out.println("B4: " + server.wads.get(i));
                     String tempWad = server.wads.get(i).replace("iwad:", "");
-                    System.out.println("B5.1: " + tempWad);
-                    System.out.println("B5.2: " + bot.cfg_data.bot_iwad_directory_path);
                     if (!Functions.fileExists(bot.cfg_data.bot_iwad_directory_path + tempWad)) {
-                        System.out.println("B6");
-                        bot.blockingIRCMessage(bot.cfg_data.ircChannel, "File (iwad) '" + tempWad + "' does not exist!");
-                        System.out.println("B7");
+                        bot.sendMessageToChannel("File (iwad) '" + tempWad + "' does not exist!");
                         return;
                     } else {
-                        System.out.println("B8");
                         server.wads.set(i, tempWad);
                     }
                 } else if (!Functions.fileExists(bot.cfg_data.bot_wad_directory_path + server.wads.get(i))) {
-                    System.out.println("B9");
-                    bot.blockingIRCMessage(bot.cfg_data.ircChannel, "File '" + server.wads.get(i) + "' does not exist!");
-                    System.out.println("B10");
+                    bot.sendMessageToChannel("File '" + server.wads.get(i) + "' does not exist!");
                     return;
                 }
             }
         }
 
-        System.out.println("A2");
-
-        // Now that we've indexed the string, check to see if we have what we need to start a server
         if (server.iwad == null) {
-            bot.blockingIRCMessage(bot.cfg_data.ircChannel, "You are missing an iwad, or have specified an incorrect iwad. You can add it by appending: iwad=your_iwad");
+            bot.sendMessageToChannel("You are missing an iwad, or have specified an incorrect iwad. You can add it by appending: iwad=your_iwad");
             return;
         }
         if (server.gamemode == null) {
-            bot.blockingIRCMessage(bot.cfg_data.ircChannel, "You are missing the gamemode, or have specified an incorrect gamemode. You can add it by appending: gamemode=your_gamemode");
+            bot.sendMessageToChannel("You are missing the gamemode, or have specified an incorrect gamemode. You can add it by appending: gamemode=your_gamemode");
             return;
         }
         if (server.servername == null) {
-            bot.blockingIRCMessage(bot.cfg_data.ircChannel, "You are missing the hostname, or your hostname syntax is wrong. You can add it by appending: hostname=\"Your Server Name\"");
+            bot.sendMessageToChannel("You are missing the hostname, or your hostname syntax is wrong. You can add it by appending: hostname=\"Your Server Name\"");
             return;
         }
-
-        System.out.println("A4");
 
         // Check if the global server limit has been reached
         if (Functions.getFirstAvailablePort(bot.getMinPort(), bot.getMaxPort()) == 0) {
-            bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Global server limit has been reached.");
+            bot.sendMessageToChannel("Global server limit has been reached.");
             return;
         }
-
-        System.out.println("A5");
 
         // Generate the unique ID
         try {
             server.server_id = Functions.generateHash();
         } catch (NoSuchAlgorithmException e) {
             logMessage(LOGLEVEL_CRITICAL, "Error generating MD5 hash!");
-            bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Error generating MD5 hash. Please contact an administrator.");
+            bot.sendMessageToChannel("Error generating MD5 hash. Please contact an administrator.");
             return;
         }
 
@@ -747,6 +738,20 @@ public class Server {
         }
         // Otherwise if something is wrong, just assume we need it
         return false;
+    }
+
+    /**
+     * Get player list
+     * @return 
+     */
+    public String getPlayers() {
+        String pList;
+
+        Collections.sort(playerList, Collator.getInstance());
+        pList = Joiner.on(", ").join(playerList);
+        pList = "[" + this.servername + "] Online (" + playerList.size() + "/" 
+                + this.maxplayers + "): " + pList;
+        return pList;
     }
 
     /**

@@ -188,6 +188,9 @@ public class Bot extends ListenerAdapter {
         // Set up MySQL
         MySQL.setMySQL(this, cfg_data.mysql_host, cfg_data.mysql_user, cfg_data.mysql_pass, cfg_data.mysql_port, cfg_data.mysql_db);
 
+        // Load persistent sessions
+        MySQL.loadSessions();
+
         // Get the time the bot was started
         this.time_started = System.currentTimeMillis();
 
@@ -495,7 +498,6 @@ public class Bot extends ListenerAdapter {
     public void onMessage(MessageEvent event) {
         String message = event.getMessage();
         String channel = event.getChannel().getName();
-        String hostmask = event.getUser().getHostmask();
         String nick = event.getUser().getNick();
         User user = event.getUser();
         // Perform these only if the message starts with a period (to save processing time on trivial chat)
@@ -550,6 +552,9 @@ public class Bot extends ListenerAdapter {
                 case ".killmine":
                     processKillMine(event.getUser(), userLevel);
                     break;
+                case ".list":
+                    listPlayers();
+                    break;
                 case ".killinactive":
                     processKillInactive(userLevel, keywords);
                     break;
@@ -592,18 +597,18 @@ public class Bot extends ListenerAdapter {
                     }
                     break;
                 case ".save":
-                    MySQL.saveSlot(getUserName(user), keywords);
+                    MySQL.saveSlot(user, keywords);
                     break;
                 case ".send":
                     if (isAccountTypeOf(userLevel, ADMIN, MODERATOR)) {
-                        sendCommand(event.getUser(), userLevel, keywords, cfg_data.ircChannel);
+                        sendCommand(user, userLevel, keywords, cfg_data.ircChannel);
                     }
                     break;
                 case ".servers":
                     processServers(event.getUser());
                     break;
                 case ".slot":
-                    MySQL.showSlot(getUserName(user), hostmask, keywords);
+                    MySQL.showSlot(user, keywords);
                     break;
                 case ".uptime":
                     if (keywords.length == 1) {
@@ -665,7 +670,8 @@ public class Bot extends ListenerAdapter {
 
     /**
      * Generate formatted CPU usage output
-     * @return 
+     *
+     * @return
      */
     public String getServerCPU() {
         return "Server load average: " + String.valueOf(ManagementFactory.getOperatingSystemMXBean().getSystemLoadAverage());
@@ -814,8 +820,13 @@ public class Bot extends ListenerAdapter {
         }
     }
 
+    public static void addUserSession(String usermask, String username) {
+        userSessions.put(usermask, username);
+        MySQL.saveSession(usermask, username);
+    }
+
     public static void addUserSession(User user, String username) {
-        userSessions.put(genUserKey(user), username);
+        addUserSession(genUserKey(user), username);
     }
 
     public static boolean checkSession(User user) {
@@ -1020,6 +1031,22 @@ public class Bot extends ListenerAdapter {
                 sendMessageToChannel("There are no servers running.");
             }
         }
+    }
+
+    /**
+     * List all players on all servers
+     *
+     */
+    private void listPlayers() {
+        logMessage(LOGLEVEL_TRIVIAL, "Processing killmine.");
+        if (!servers.isEmpty()) {
+            for (Server s : servers) {
+                sendMessageToChannel(s.getPlayers());
+            }
+        } else {
+            sendMessageToChannel("There are no servers running.");
+        }
+
     }
 
     /**
@@ -1248,10 +1275,10 @@ public class Bot extends ListenerAdapter {
             case "login":
                 if (keywords.length > 2) {
                     if (MySQL.userLogin(user, keywords[1], keywords[2])) {
-                        asyncCTCPMessage(nick, "Successfully logged on.");
+                        asyncIRCMessage(nick, "Successfully logged on.");
                         addUserSession(user, keywords[1]);
                     } else {
-                        asyncCTCPMessage(nick, "Invalid username or password!");
+                        asyncIRCMessage(nick, "Invalid username or password!");
                     }
                 } else {
                     asyncIRCMessage(nick, "Incorrect syntax! Usage is: /msg " + cfg_data.ircName + " login <username> <password>");

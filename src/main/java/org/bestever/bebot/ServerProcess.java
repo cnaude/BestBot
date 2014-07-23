@@ -24,6 +24,8 @@ import java.io.PrintWriter;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * This class is specifically for running the server only and notifying the bot
@@ -64,17 +66,17 @@ public class ServerProcess extends Thread {
      * @param bot
      */
     public ServerProcess(Server serverReference, Bot bot) {
-        System.out.println("L1");
+
         this.server = serverReference;
-        System.out.println("L2");
+
         this.bot = bot;
-        System.out.println("L3");
+
         try {
             processServerRunCommand();
         } catch (Exception e) {
             System.out.println("ERROR: " + e.getMessage());
         }
-        System.out.println("L4");
+
     }
 
     /**
@@ -121,7 +123,7 @@ public class ServerProcess extends Thread {
         }
 
         if (server.enable_skulltag_data) {
-            System.out.println("P12");
+
             // Add the skulltag_* data files first since they need to be accessed by other wads
             server.wads.add(0, "skulltag_actors_1-1-1.pk3");
             server.wads.add(1, "skulltag_data_126.pk3");
@@ -173,11 +175,11 @@ public class ServerProcess extends Thread {
         if (server.instagib) {
             addParameter("+instagib", "1");
         }
-        
+
         if (server.randommaprotation) {
             addParameter("+sv_randommaprotation", "1");
         }
-        
+
         if (server.maprotation) {
             addParameter("+sv_maprotation", "1");
         }
@@ -185,15 +187,15 @@ public class ServerProcess extends Thread {
         if (server.buckshot) {
             addParameter("+buckshot", "1");
         }
-        
+
         if (server.fraglimit > 0) {
             addParameter("+fraglimit", Integer.toString(server.fraglimit));
         }
-        
+
         if (server.maxplayers > 0) {
             addParameter("+sv_maxplayers", Integer.toString(server.maxplayers));
         }
-        
+
         if (server.timelimit > 0) {
             addParameter("+timelimit", Integer.toString(server.timelimit));
         }
@@ -234,22 +236,16 @@ public class ServerProcess extends Thread {
      */
     @Override
     public void run() {
-        System.out.println("R1");
         String portNumber = ""; // This will hold the port number
-        System.out.println("R2");
         File logFile, banlist, whitelist, adminlist;
-        System.out.println("R3");
         String strLine, dateNow;
-        System.out.println("R4");
         server.time_started = System.currentTimeMillis();
-        System.out.println("R5");
+        server.playerList = new ArrayList<>();
         last_activity = System.currentTimeMillis(); // Last activity should be when we start
-        System.out.println("R6");
         BufferedReader br = null;
         BufferedWriter bw = null;
         SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MMM-dd HH:mm:ss");
         try {
-            System.out.println("R7");
             // Ensure we have the files created
             banlist = new File(bot.cfg_data.bot_banlistdir + server.server_id + ".txt");
             if (!banlist.exists()) {
@@ -263,21 +259,21 @@ public class ServerProcess extends Thread {
             if (!adminlist.exists()) {
                 adminlist.createNewFile();
             }
-System.out.println("R8");
+
             // Set up the server
             ProcessBuilder pb = new ProcessBuilder(serverRunCommands);
-            System.out.println("R8.1");
+
             // Redirect stderr to stdout
             pb.redirectErrorStream(true);
-            System.out.println("R8.2");
+
             proc = pb.start();
-            System.out.println("R8.3");
+
             br = new BufferedReader(new InputStreamReader(proc.getInputStream()));
-            System.out.println("R8.4");
+
 
             // Set up the input (with autoflush)
             server.in = new PrintWriter(proc.getOutputStream(), true);
-System.out.println("R9");
+
             // Set up file/IO
             logFile = new File(bot.cfg_data.bot_logfiledir + server.server_id + ".txt");
             bw = new BufferedWriter(new FileWriter(bot.cfg_data.bot_logfiledir + server.server_id + ".txt"));
@@ -290,7 +286,7 @@ System.out.println("R9");
             // NOTE: As of now, BE users can still check the RCON password by accessing the control panel on the website.
             // We'll fix this later by changing the RCON from the unique_id to a random MD5 hash
             if (bot.cfg_data.bot_public_rcon || AccountType.isAccountTypeOf(server.user_level, AccountType.ADMIN, AccountType.MODERATOR, AccountType.RCON)) {
-                bot.blockingIRCMessage(server.sender, "Your unique server ID is: " + server.server_id + ". This is your RCON password, which can be used using 'send_password " + server.server_id + "' via the in-game console. You can view your logfile at http://h.cnaude.org/doombot/logs/" + server.server_id + ".txt");
+                bot.asyncIRCMessage(server.sender, "Your unique server ID is: " + server.server_id + ". This is your RCON password, which can be used using 'send_password " + server.server_id + "' via the in-game console. You can view your logfile at http://h.cnaude.org/doombot/logs/" + server.server_id + ".txt");
             }
 
             // Process server while it outputs text
@@ -322,7 +318,7 @@ System.out.println("R9");
                     System.out.println(strLine);
                     bot.servers.add(server);
                     bot.blockingIRCMessage(server.irc_channel, "Server started successfully on port " + server.port + "!");
-                    bot.blockingIRCMessage(server.sender, "To kill your server, in the channel " + bot.cfg_data.ircChannel + ", type .killmine to kill all of your servers, or .kill " + server.port + " to kill just this one.");
+                    bot.asyncIRCMessage(server.sender, "To kill your server, in the channel " + bot.cfg_data.ircChannel + ", type .killmine to kill all of your servers, or .kill " + server.port + " to kill just this one.");
                 }
 
                 // Check for banned players
@@ -330,7 +326,7 @@ System.out.println("R9");
                     String ip = keywords[keywords.length - 1].split(":")[0];
                     String pIP;
                     if ((pIP = MySQL.checkBanned(ip)) != null) {
-                        server.in.println("addban " + pIP + " perm \"You have been banned from Best Ever. If you feel that this is an error, please visit irc.zandronum.com #bestever.\"");
+                        server.in.println("addban " + pIP + " perm \"You have been banned.\"");
                     }
                 }
 
@@ -346,13 +342,35 @@ System.out.println("R9");
                 // If we have a player joining or leaving, mark this server as active
                 if (strLine.endsWith("has connected.") || strLine.endsWith("disconnected.")) {
                     last_activity = System.currentTimeMillis();
+                    bot.sendMessageToChannel("[" + server.servername + "] " + strLine);
+                }
+
+                if (strLine.endsWith("joined the game.")) {
+                    last_activity = System.currentTimeMillis();
+                    bot.sendMessageToChannel("[" + server.servername + "] " + strLine);
+                }
+
+                Matcher m = Pattern.compile("(.*) has connected\\.").matcher(strLine);
+                if (m.find()) {
+                    String player = m.group(1);
+                    if (!server.playerList.contains(player)) {
+                        server.playerList.add(player);
+                    }
+                }
+                
+                m = Pattern.compile("^client (.*) disconnected\\.").matcher(strLine);
+                if (m.find()) {
+                    String player = m.group(1);
+                    if (server.playerList.contains(player)) {
+                        server.playerList.remove(player);
+                    }
                 }
 
                 dateNow = formatter.format(Calendar.getInstance().getTime());
                 bw.write(dateNow + " " + strLine + "\n");
                 bw.flush();
             }
-System.out.println("R10");
+
             // Handle cleanup
             dateNow = formatter.format(Calendar.getInstance().getTime());
             long end = System.currentTimeMillis();
@@ -368,17 +386,16 @@ System.out.println("R10");
                     bot.blockingIRCMessage(server.irc_channel, "Server was not started. This is most likely due to a wad error.");
                 }
             }
-System.out.println("R111");
-            // Remove from the Linked List
+
             bot.removeServerFromLinkedList(this.server);
-System.out.println("R12");
+
             // Auto-restart the server if enabled, and only if successfully started
             if (server.auto_restart && server.port != 0) {
                 server.temp_port = server.port;
                 bot.blockingIRCMessage(bot.cfg_data.ircChannel, "Server crashed! Attempting to restart server...");
                 bot.processHost(server.username, server.user_level, server.sender, server.irc_channel, server.host_command, true, server.port);
             }
-System.out.println("R13");
+
         } catch (IOException | NumberFormatException e) {
 
         } finally {
