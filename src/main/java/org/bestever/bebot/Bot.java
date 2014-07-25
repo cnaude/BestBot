@@ -53,6 +53,8 @@ import org.pircbotx.PircBotX;
 import org.pircbotx.User;
 import org.pircbotx.exception.IrcException;
 import org.pircbotx.hooks.ListenerAdapter;
+import org.pircbotx.hooks.events.ConnectEvent;
+import org.pircbotx.hooks.events.DisconnectEvent;
 import org.pircbotx.hooks.events.JoinEvent;
 import org.pircbotx.hooks.events.KickEvent;
 import org.pircbotx.hooks.events.MessageEvent;
@@ -88,6 +90,16 @@ public class Bot extends ListenerAdapter {
      *
      */
     protected IRCMessageQueueWatcher ircMessageQueue;
+
+    /**
+     * Bot connection watcher
+     */
+    protected BotWatcher botWatcher;
+
+    /**
+     * Holds connection status. Use this to check connection status.
+     */
+    protected boolean connected;
 
     /**
      * The lowest port (the base port) that the bot uses. This should NEVER be
@@ -142,12 +154,42 @@ public class Bot extends ListenerAdapter {
                 .setVersion(cfg_data.ircVersion)
                 .setServer(cfg_data.ircServer, cfg_data.ircPort, cfg_data.ircPass)
                 .addAutoJoinChannel(cfg_data.ircChannel)
-                .setAutoReconnect(cfg_data.ircAutoReconnect)
                 .addListener(this);
 
         Configuration configuration = configBuilder.buildConfiguration();
         bot = new PircBotX(configuration);
         pircBotThread = new PircBotXThread(bot);
+    }
+
+    /**
+     * Reconnect
+     */
+    public void reconnect() {
+        bot.stopBotReconnect();
+    }
+
+    /**
+     *
+     * @return
+     */
+    public boolean isConnectedBlocking() {
+        return bot.isConnected();
+    }
+
+    /**
+     *
+     * @return
+     */
+    public boolean isConnected() {
+        return connected;
+    }
+
+    /**
+     *
+     * @param connected
+     */
+    public void setConnected(boolean connected) {
+        this.connected = connected;
     }
 
     /**
@@ -161,6 +203,7 @@ public class Bot extends ListenerAdapter {
         cfg_data = cfgfile;
         buildAndStartIrcBot();
         ircMessageQueue = new IRCMessageQueueWatcher(this);
+        botWatcher = new BotWatcher(this);
 
         // Set up the logger
         Logger.setLogFile(cfg_data.bot_logfile);
@@ -453,6 +496,20 @@ public class Bot extends ListenerAdapter {
     }
 
     /**
+     * Sends a message to all servers
+     *
+     * @param user user - the user
+     * @param keywords String[] - array of words in message sent
+     */
+    private void globalBroadcast(User user, String message) {
+        if (servers != null) {
+            for (Server s : servers) {
+                s.in.println("say \"[IRC] <" + user.getNick() + "> " + Functions.escapeQuotes(message) + "\"" );
+            }
+        }
+    }
+
+    /**
      * Sends a command to specified server
      *
      * @param level int - the user's level
@@ -623,6 +680,8 @@ public class Bot extends ListenerAdapter {
                 default:
                     break;
             }
+        } else {
+            globalBroadcast(user, message);
         }
     }
 
@@ -1397,7 +1456,7 @@ public class Bot extends ListenerAdapter {
     @Override
     public void onJoin(JoinEvent event) {
         logMessage(LOGLEVEL_NORMAL, event.getUser().getNick() + " has joined (" + event.getUser().getLogin() + "@" + event.getUser().getHostmask() + ")");
-        expireSession(event.getUser());
+        //expireSession(event.getUser());
     }
 
     /**
@@ -1408,7 +1467,7 @@ public class Bot extends ListenerAdapter {
     @Override
     public void onPart(PartEvent event) {
         logMessage(LOGLEVEL_NORMAL, event.getUser().getNick() + " has left (" + event.getReason() + ")");
-        expireSession(event.getUser());
+        //expireSession(event.getUser());
     }
 
     /**
@@ -1419,7 +1478,7 @@ public class Bot extends ListenerAdapter {
     @Override
     public void onQuit(QuitEvent event) {
         logMessage(LOGLEVEL_NORMAL, event.getUser().getNick() + " has quit (" + event.getReason() + ")");
-        expireSession(event.getUser());
+        //expireSession(event.getUser());
     }
 
     /**
@@ -1508,6 +1567,8 @@ public class Bot extends ListenerAdapter {
                     b.pircBotThread.cancel();
                     b.processKillAll(ADMIN);
                     b.queryManager.cancel();
+                    b.ircMessageQueue.cancel();
+                    b.botWatcher.cancel();
                     b.processQuit(ADMIN);
                     break;
                 }
@@ -1521,7 +1582,7 @@ public class Bot extends ListenerAdapter {
      * Blocking IRC message
      */
     public void blockingIRCMessage(String target, String message) {
-        if (bot.isConnected()) {
+        if (this.isConnected()) {
             bot.sendIRC().message(target, message);
         }
     }
@@ -1530,9 +1591,29 @@ public class Bot extends ListenerAdapter {
      * Blocking CTCP message
      */
     public void blockingCTCPMessage(String target, String message) {
-        if (bot.isConnected()) {
+        if (this.isConnected()) {
             bot.sendIRC().ctcpResponse(target, message);
         }
+    }
+
+    /**
+     * Set connection status on connect
+     *
+     * @param event
+     */
+    @Override
+    public void onConnect(ConnectEvent event) {
+        this.setConnected(true);
+    }
+
+    /**
+     * Set connection status on disconnect
+     *
+     * @param event
+     */
+    @Override
+    public void onDisconnect(DisconnectEvent event) {
+        this.setConnected(false);
     }
 
 }

@@ -15,6 +15,10 @@
 package org.bestever.bebot;
 
 import com.google.common.base.Joiner;
+import com.google.common.collect.ContiguousSet;
+import com.google.common.collect.DiscreteDomain;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Range;
 import java.io.File;
 import java.io.PrintWriter;
 import java.security.NoSuchAlgorithmException;
@@ -24,7 +28,9 @@ import java.text.Collator;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Formatter;
 import java.util.LinkedList;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import static org.bestever.bebot.Logger.LOGLEVEL_CRITICAL;
@@ -149,6 +155,11 @@ public class Server {
     public String[] mapwads;
 
     /**
+     * Contains a list of maps to be added
+     */
+    public ArrayList<String> maplist;
+
+    /**
      * Holds the skill of the game
      */
     public int skill = 5;
@@ -158,6 +169,12 @@ public class Server {
      *
      */
     public int fraglimit = 15;
+
+    /**
+     * Holds the duel limit
+     *
+     */
+    public int duellimit = 1;
 
     /**
      * Holds the time limit
@@ -267,6 +284,7 @@ public class Server {
     public static void handleHostCommand(String username, Bot bot, LinkedList<Server> servers, String sender, String channel, String message, int userLevel, boolean autoRestart, int port) {
         Server server = new Server();
         server.wads = new ArrayList<>();
+        server.maplist = new ArrayList<>();
         server.auto_restart = true;
         server.temp_port = port;
         server.sender = sender;
@@ -349,6 +367,9 @@ public class Server {
                         return;
                     }
                     break;
+                case "duellimit":
+                    server.duellimit = Integer.valueOf(m.group(2));
+                    break;
                 case "fraglimit":
                     server.fraglimit = Integer.valueOf(m.group(2));
                     break;
@@ -372,6 +393,10 @@ public class Server {
                     break;
                 case "mapwad":
                     server.mapwads = addWads(m.group(2));
+                    break;
+                case "map":
+                case "maps":
+                    server.maplist = addMaps(m.group(2));
                     break;
                 case "maxplayers":
                     server.maxplayers = Integer.valueOf(m.group(2));
@@ -577,6 +602,30 @@ public class Server {
     }
 
     /**
+     * Returns an array of maps from a String
+     *
+     * @param map comma-seperated list of maps
+     * @return array of maps
+     */
+    private static ArrayList<String> addMaps(String map) {
+        ArrayList<String> tmpMapList = new ArrayList<>();
+        Pattern regex = Pattern.compile("^map(\\d+)-map(\\d+)$");
+        for (String s : map.split(",")) {
+            Matcher m = regex.matcher(s.toLowerCase());
+            if (m.find()) {
+                int a = Integer.parseInt(m.group(1));
+                int b = Integer.parseInt(m.group(2));
+                for (int i : ContiguousSet.create(Range.closed(a, b), DiscreteDomain.integers()).asList()) {
+                    tmpMapList.add(String.format("map%02d", i));
+                }
+            } else {
+                tmpMapList.add(s);
+            }
+        }
+        return tmpMapList;
+    }
+
+    /**
      * Checks to see if a wad is an IWAD
      *
      * @param wad String - name of the wad
@@ -742,14 +791,15 @@ public class Server {
 
     /**
      * Get player list
-     * @return 
+     *
+     * @return
      */
     public String getPlayers() {
         String pList;
 
         Collections.sort(playerList, Collator.getInstance());
         pList = Joiner.on(", ").join(playerList);
-        pList = "[" + this.servername + "] Online (" + playerList.size() + "/" 
+        pList = "[" + this.servername + "] Online (" + playerList.size() + "/"
                 + this.maxplayers + "): " + pList;
         return pList;
     }

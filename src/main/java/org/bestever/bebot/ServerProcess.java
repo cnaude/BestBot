@@ -41,7 +41,7 @@ public class ServerProcess extends Thread {
     /**
      * Bot
      */
-    private Bot bot;
+    private final Bot bot;
 
     /**
      * A reference to the server
@@ -191,6 +191,16 @@ public class ServerProcess extends Thread {
         if (server.fraglimit > 0) {
             addParameter("+fraglimit", Integer.toString(server.fraglimit));
         }
+        
+        if (!server.maplist.isEmpty()) {
+            for (String s : server.maplist) {
+                addParameter("+addmap", s);
+            }
+        }
+        
+        if (server.duellimit > 0) {
+            addParameter("+duellimit", Integer.toString(server.duellimit));
+        }
 
         if (server.maxplayers > 0) {
             addParameter("+sv_maxplayers", Integer.toString(server.maxplayers));
@@ -338,31 +348,43 @@ public class ServerProcess extends Thread {
                         server.rcon_password = keywords[2].replace("\"", "");
                     }
                 }
-
-                // If we have a player joining or leaving, mark this server as active
-                if (strLine.endsWith("has connected.") || strLine.endsWith("disconnected.")) {
+                
+                Matcher m = Pattern.compile("^\\w+ joined the game\\.").matcher(strLine);
+                if (m.find()) {
                     last_activity = System.currentTimeMillis();
                     bot.sendMessageToChannel("[" + server.servername + "] " + strLine);
                 }
 
-                if (strLine.endsWith("joined the game.")) {
-                    last_activity = System.currentTimeMillis();
-                    bot.sendMessageToChannel("[" + server.servername + "] " + strLine);
-                }
-
-                Matcher m = Pattern.compile("(.*) has connected\\.").matcher(strLine);
+                m = Pattern.compile("(\\w+) has connected\\.").matcher(strLine);
                 if (m.find()) {
                     String player = m.group(1);
                     if (!server.playerList.contains(player)) {
                         server.playerList.add(player);
                     }
+                    last_activity = System.currentTimeMillis();
+                    bot.sendMessageToChannel("[" + server.servername + "] " + strLine);
                 }
                 
-                m = Pattern.compile("^client (.*) disconnected\\.").matcher(strLine);
+                m = Pattern.compile("^client (\\w+) disconnected\\.").matcher(strLine);
                 if (m.find()) {
                     String player = m.group(1);
                     if (server.playerList.contains(player)) {
                         server.playerList.remove(player);
+                    }
+                    bot.sendMessageToChannel("[" + server.servername + "] " + strLine);
+                }
+                
+                m = Pattern.compile("^\\w+ wins!").matcher(strLine);
+                if (m.find()) {
+                    bot.sendMessageToChannel("[" + server.servername + "] " + strLine);
+                }
+                
+                m = Pattern.compile("^(\\w+): (.*)").matcher(strLine);
+                if (m.find()) {
+                    String player = m.group(1);
+                    if (server.playerList.contains(player)) {
+                        String message = m.group(2);
+                        bot.sendMessageToChannel("[" + server.servername + "] <" + player + "> " + message);
                     }
                 }
 

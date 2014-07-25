@@ -31,7 +31,6 @@ public class AccountType {
      */
     public static boolean isAccountTypeOf(int accountType, int... types) {
         for (int type : types) {
-            System.out.println("accountType: " + accountType + " >= " + type + " = " + (accountType >= type));
             return (accountType >= type);
         }
         return false;
