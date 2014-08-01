@@ -14,6 +14,7 @@
 // --------------------------------------------------------------------------
 package org.bestever.bebot;
 
+import com.google.common.base.Joiner;
 import java.net.UnknownHostException;
 import java.security.NoSuchAlgorithmException;
 import java.security.spec.InvalidKeySpecException;
@@ -30,7 +31,6 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.logging.Level;
-import static org.bestever.bebot.Bot.genUserKey;
 import static org.bestever.bebot.Logger.LOGLEVEL_CRITICAL;
 import static org.bestever.bebot.Logger.LOGLEVEL_IMPORTANT;
 import static org.bestever.bebot.Logger.LOGLEVEL_NORMAL;
@@ -97,7 +97,7 @@ public class MySQL {
         try {
             Class.forName("com.mysql.jdbc.Driver");
         } catch (ClassNotFoundException e) {
-            logMessage(LOGLEVEL_CRITICAL, "Could not initialize MySQL Driver!");
+            logMessage(LOGLEVEL_CRITICAL, "Could not initialize MySQL Driver! " + e.getMessage());
             System.exit(-1);
         }
     }
@@ -575,7 +575,7 @@ public class MySQL {
             return;
         }
         if (words.length > 2) {
-            String hostmessage = Functions.implode(Arrays.copyOfRange(words, 2, words.length), " ");
+            String hostmessage = Joiner.on(" ").join(Arrays.copyOfRange(words, 2, words.length), " ");            
             if ((words.length > 2) && (Functions.isNumeric(words[1]))) {
                 int slot = Integer.parseInt(words[1]);
                 if (slot > 0 && slot < 11) {

@@ -14,6 +14,7 @@
 // --------------------------------------------------------------------------
 package org.bestever.bebot;
 
+import com.google.common.base.Joiner;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
@@ -113,13 +114,14 @@ public class ServerProcess extends Thread {
         addParameter("+exec", bot.cfg_data.bot_cfg_directory_path + "global.cfg");
 
         // Create a custom wadpage for us
-        String key = MySQL.createWadPage(Functions.implode(this.server.wads, ","));
+        server.website = bot.cfg_data.bot_wad_url + MySQL.createWadPage(Joiner.on(",").join(this.server.wads));
 
         // Add the custom page to sv_website to avoid large wad list lookups
-        addParameter("+sv_website", bot.cfg_data.bot_wad_url + key);
+        addParameter("+sv_website", server.website);
 
         if (server.iwad != null) {
-            addParameter("-iwad", bot.cfg_data.bot_iwad_directory_path + server.iwad);
+            String iwad = bot.cfg_data.bot_iwad_directory_path + server.iwad;
+            addParameter("-iwad", iwad);
         }
 
         if (server.enable_skulltag_data) {
@@ -191,13 +193,13 @@ public class ServerProcess extends Thread {
         if (server.fraglimit > 0) {
             addParameter("+fraglimit", Integer.toString(server.fraglimit));
         }
-        
+
         if (!server.maplist.isEmpty()) {
             for (String s : server.maplist) {
                 addParameter("+addmap", s);
             }
         }
-        
+
         if (server.duellimit > 0) {
             addParameter("+duellimit", Integer.toString(server.duellimit));
         }
@@ -229,12 +231,13 @@ public class ServerProcess extends Thread {
     /**
      * Adds a parameter to the server run command araylist
      *
-     * @param parameter String - parameter
-     * @param argument String - argument
+     * @param param String - parameter
+     * @param arg String - argument
      */
-    public void addParameter(String parameter, String argument) {
-        serverRunCommands.add(parameter);
-        serverRunCommands.add(argument);
+    public void addParameter(String param, String arg) {
+        Logger.logMessage(Logger.LOGLEVEL_DEBUG, "Adding param: " + param + " " + arg);
+        serverRunCommands.add(param);
+        serverRunCommands.add(arg);
     }
 
     /**
@@ -280,7 +283,6 @@ public class ServerProcess extends Thread {
 
             br = new BufferedReader(new InputStreamReader(proc.getInputStream()));
 
-
             // Set up the input (with autoflush)
             server.in = new PrintWriter(proc.getOutputStream(), true);
 
@@ -291,12 +293,10 @@ public class ServerProcess extends Thread {
                 logFile.createNewFile();
             }
 
-            // Check if global RCON variable is set, or if the user has access to the RCON portion
-            // If either criteria is met, the user will be messaged the RCON password
-            // NOTE: As of now, BE users can still check the RCON password by accessing the control panel on the website.
-            // We'll fix this later by changing the RCON from the unique_id to a random MD5 hash
             if (bot.cfg_data.bot_public_rcon || AccountType.isAccountTypeOf(server.user_level, AccountType.ADMIN, AccountType.MODERATOR, AccountType.RCON)) {
-                bot.asyncIRCMessage(server.sender, "Your unique server ID is: " + server.server_id + ". This is your RCON password, which can be used using 'send_password " + server.server_id + "' via the in-game console. You can view your logfile at http://h.cnaude.org/doombot/logs/" + server.server_id + ".txt");
+                bot.asyncIRCMessage(server.sender, "Server ID (and RCON password): " + server.server_id);
+                bot.asyncIRCMessage(server.sender, "Log file: " + bot.cfg_data.bot_logs_url + server.server_id + ".txt");
+                bot.asyncIRCMessage(server.sender, "Wad page: " + server.website);
             }
 
             // Process server while it outputs text
@@ -349,7 +349,17 @@ public class ServerProcess extends Thread {
                     }
                 }
                 
-                Matcher m = Pattern.compile("^\\w+ joined the game\\.").matcher(strLine);
+                // Catch player chat messages
+                Matcher m = Pattern.compile("^(\\w+): (.*)").matcher(strLine);
+                if (m.find()) {
+                    String player = m.group(1);
+                    if (server.playerList.contains(player)) {
+                        String message = m.group(2);
+                        bot.sendMessageToChannel("[" + server.servername + "] <" + player + "> " + message);
+                    }
+                }
+
+                m = Pattern.compile("^\\w+ joined the game\\.").matcher(strLine);
                 if (m.find()) {
                     last_activity = System.currentTimeMillis();
                     bot.sendMessageToChannel("[" + server.servername + "] " + strLine);
@@ -364,7 +374,7 @@ public class ServerProcess extends Thread {
                     last_activity = System.currentTimeMillis();
                     bot.sendMessageToChannel("[" + server.servername + "] " + strLine);
                 }
-                
+
                 m = Pattern.compile("^client (\\w+) disconnected\\.").matcher(strLine);
                 if (m.find()) {
                     String player = m.group(1);
@@ -373,21 +383,22 @@ public class ServerProcess extends Thread {
                     }
                     bot.sendMessageToChannel("[" + server.servername + "] " + strLine);
                 }
-                
+
                 m = Pattern.compile("^\\w+ wins!").matcher(strLine);
                 if (m.find()) {
                     bot.sendMessageToChannel("[" + server.servername + "] " + strLine);
                 }
                 
-                m = Pattern.compile("^(\\w+): (.*)").matcher(strLine);
+                m = Pattern.compile("^\\w+ exited the level.").matcher(strLine);
                 if (m.find()) {
-                    String player = m.group(1);
-                    if (server.playerList.contains(player)) {
-                        String message = m.group(2);
-                        bot.sendMessageToChannel("[" + server.servername + "] <" + player + "> " + message);
-                    }
+                    bot.sendMessageToChannel("[" + server.servername + "] " + strLine);
                 }
-
+                
+                m = Pattern.compile("^\\*\\*\\* \\w+: .* \\*\\*\\*$").matcher(strLine);
+                if (m.find()) {
+                    bot.sendMessageToChannel("[" + server.servername + "] " + strLine);
+                }
+                
                 dateNow = formatter.format(Calendar.getInstance().getTime());
                 bw.write(dateNow + " " + strLine + "\n");
                 bw.flush();

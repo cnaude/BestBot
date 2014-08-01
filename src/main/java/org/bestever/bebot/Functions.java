@@ -42,9 +42,8 @@ public class Functions {
         if (isNumeric(port)) {
             int numPort = Integer.valueOf(port);
             return numPort >= Bot.min_port && numPort < Bot.max_port;
-        } else {
-            return false;
         }
+        return false;
     }
 
     /**
@@ -147,10 +146,9 @@ public class Functions {
      * @return username The user's actual IRC name
      */
     /*
-    public static String getUserName(String hostname) {
-        return hostname.replace(".users.zandronum.com", "");
-    }*/
-    
+     public static String getUserName(String hostname) {
+     return hostname.replace(".users.zandronum.com", "");
+     }*/
     /**
      *
      * @param user
@@ -175,7 +173,7 @@ public class Functions {
         }
         return false;
     }
-    
+
     /**
      *
      * @param nick
@@ -196,18 +194,6 @@ public class Functions {
         }
         return false;
     }
-
-    /**
-     * Checks to see if a user is logged on their Zandronum IRC account
-     *
-     * @param hostname The user's hostname
-     * @return username True if logged in, false if not
-     */
-    /*
-    public static boolean checkLoggedIn(String hostname) {
-        hostname = hostname.replace(".users.zandronum.com", "");
-        return !hostname.contains(".");
-    } */
 
     /**
      * Checks to see if a number is numeric In a recent update, now checks
@@ -297,9 +283,7 @@ public class Functions {
      * @return true if exists, false if not
      */
     public static boolean fileExists(String file) {
-        System.out.println("FILE: " + file);
-        File f = new File(file);
-        return f.exists();
+        return new File(file).exists();
     }
 
     /**
@@ -312,45 +296,4 @@ public class Functions {
         return input.replace("/", "").trim();
     }
 
-    /**
-     * Implodes a character between a string array
-     *
-     * @param inputArray String[] - array to combine
-     * @param glueString String - delimiter
-     * @return String containing all array elements seperated by glue string
-     */
-    public static String implode(String[] inputArray, String glueString) {
-        String output = "";
-        if (inputArray.length > 0) {
-            StringBuilder sb = new StringBuilder();
-            sb.append(inputArray[0]);
-            for (int i = 1; i < inputArray.length; i++) {
-                sb.append(glueString);
-                sb.append(inputArray[i].trim());
-            }
-            output = sb.toString();
-        }
-        return output;
-    }
-
-    /**
-     * Implodes a character between a string array
-     *
-     * @param inputArray String[] - array to combine
-     * @param glueString String - delimiter
-     * @return String containing all array elements seperated by glue string
-     */
-    public static String implode(ArrayList<String> inputArray, String glueString) {
-        String output = "";
-        if (inputArray.size() > 0) {
-            StringBuilder sb = new StringBuilder();
-            sb.append(inputArray.get(0));
-            for (int i = 1; i < inputArray.size(); i++) {
-                sb.append(glueString);
-                sb.append(inputArray.get(i).trim());
-            }
-            output = sb.toString();
-        }
-        return output;
-    }
 }

@@ -255,6 +255,11 @@ public class Server {
      * Active player list
      */
     public ArrayList<String> playerList;
+    
+    /** 
+     *  Web site URL
+     */
+    public String website;
 
     /**
      * Default constructor for building a server
@@ -879,7 +884,7 @@ public class Server {
                 return "skill: " + this.skill;
             case "wad":
             case "wads":
-                return "wads: " + Functions.implode(this.wads, ", ");
+                return "wads: " + Joiner.on(", ").join(wads);
             default:
                 break;
         }

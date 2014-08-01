@@ -2,6 +2,8 @@ package org.bestever.bebot;
 
 import java.util.Timer;
 import java.util.TimerTask;
+import static org.bestever.bebot.Logger.LOGLEVEL_IMPORTANT;
+import static org.bestever.bebot.Logger.logMessage;
 
 /**
  * This thread checks each bot for connectivity and reconnects when appropriate.
@@ -22,7 +24,6 @@ public class BotWatcher {
         this.bot = bot;
         this.timer = new Timer();
         startWatcher();
-
     }
 
     private void startWatcher() {
@@ -34,12 +35,13 @@ public class BotWatcher {
                 } else {
                     bot.setConnected(false);
                     if (bot.cfg_data.ircAutoReconnect) {
+                        logMessage(LOGLEVEL_IMPORTANT, "Attempting to reconnect to IRC...");
                         bot.reconnect();
                     }
                 }
             }
 
-        }, 0, 60);
+        }, 0, 5000);
     }
 
     /**

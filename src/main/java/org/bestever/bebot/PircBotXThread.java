@@ -37,7 +37,7 @@ public class PircBotXThread {
 
     public void cancel() {
         if (pircBot.isConnected()) {
-            pircBot.sendIRC().quitServer("Exiting via console.");
+            pircBot.sendIRC().quitServer("Goodbye!");
         }
         timer.cancel();
     }

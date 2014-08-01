@@ -14,7 +14,10 @@
 // --------------------------------------------------------------------------
 package org.bestever.bebot;
 
+import com.google.common.base.Joiner;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -165,7 +168,8 @@ public class Bot extends ListenerAdapter {
      * Reconnect
      */
     public void reconnect() {
-        bot.stopBotReconnect();
+        pircBotThread.cancel();
+        buildAndStartIrcBot();
     }
 
     /**
@@ -481,7 +485,7 @@ public class Bot extends ListenerAdapter {
         if (isAccountTypeOf(level, ADMIN, MODERATOR)) {
             if (keywords.length > 1) {
                 if (servers != null) {
-                    String message = Functions.implode(Arrays.copyOfRange(keywords, 1, keywords.length), " ");
+                    String message = Joiner.on(" ").join(Arrays.copyOfRange(keywords, 1, keywords.length), " ");
                     for (Server s : servers) {
                         s.in.println("say \\cf--------------\\cc; say GLOBAL ANNOUNCEMENT: " + Functions.escapeQuotes(message) + "; say \\cf--------------\\cc;");
                     }
@@ -504,7 +508,7 @@ public class Bot extends ListenerAdapter {
     private void globalBroadcast(User user, String message) {
         if (servers != null) {
             for (Server s : servers) {
-                s.in.println("say \"[IRC] <" + user.getNick() + "> " + Functions.escapeQuotes(message) + "\"" );
+                s.in.println("say \"[IRC] <" + user.getNick() + "> " + Functions.escapeQuotes(message) + "\"");
             }
         }
     }
@@ -522,7 +526,7 @@ public class Bot extends ListenerAdapter {
             if (keywords.length > 2) {
                 if (Functions.isNumeric(keywords[1])) {
                     int port = Integer.parseInt(keywords[1]);
-                    String message = Functions.implode(Arrays.copyOfRange(keywords, 2, keywords.length), " ");
+                    String message = Joiner.on(" ").join(Arrays.copyOfRange(keywords, 2, keywords.length));
                     Server s = getServer(port);
                     if (s != null) {
                         if (!getUserName(user).isEmpty() && isAccountTypeOf(level, MODERATOR)) {
@@ -587,12 +591,15 @@ public class Bot extends ListenerAdapter {
                 case ".get":
                     processGet(userLevel, keywords);
                     break;
+                case ".delete":
+                    deleteFile(event.getUser(), userLevel, keywords);
+                    break;
                 case ".download":
                     downloadFile(event.getUser(), userLevel, keywords);
                     break;
                 case ".help":
                     if (cfg_data.bot_help.isEmpty()) {
-                        sendMessageToChannel("There is no helpfile.");
+                        sendMessageToChannel("No help! Please update ini file.");
                     } else {
                         sendMessageToChannel(cfg_data.bot_help);
                     }
@@ -616,7 +623,7 @@ public class Bot extends ListenerAdapter {
                     processKillInactive(userLevel, keywords);
                     break;
                 case ".liststartwads":
-                    sendMessageToChannel("These wads are automatically loaded when a server is started: " + Functions.implode(cfg_data.bot_extra_wads, ", "));
+                    sendMessageToChannel("These wads are automatically loaded when a server is started: " + Joiner.on(", ").join(cfg_data.bot_extra_wads));
                     break;
                 case ".load":
                     MySQL.loadSlot(getUserName(user), keywords, userLevel, channel, nick);
@@ -661,8 +668,11 @@ public class Bot extends ListenerAdapter {
                         sendCommand(user, userLevel, keywords, cfg_data.ircChannel);
                     }
                     break;
-                case ".servers":
+                case ".myservers":
                     processServers(event.getUser());
+                    break;
+                case ".servers":
+                    processServers();
                     break;
                 case ".slot":
                     MySQL.showSlot(user, keywords);
@@ -720,7 +730,7 @@ public class Bot extends ListenerAdapter {
             return;
         }
         if (isAccountTypeOf(userLevel, ADMIN, MODERATOR)) {
-            cfg_data.bot_notice = Functions.implode(Arrays.copyOfRange(keywords, 1, keywords.length), " ");
+            cfg_data.bot_notice = Joiner.on(" ").join(Arrays.copyOfRange(keywords, 1, keywords.length));
             sendMessageToChannel("New notice has been set.");
         } else {
             sendMessageToChannel("You do not have permission to set the notice.");
@@ -772,7 +782,7 @@ public class Bot extends ListenerAdapter {
     private String processCommands(int userLevel) {
         logMessage(LOGLEVEL_TRIVIAL, "Displaying processComamnds().");
         if (isAccountTypeOf(userLevel, ADMIN)) {
-            return ".addban .addstartwad .autorestart .banwad .broadcast .commands .cpu .delban .delstartwad .file .get .help"
+            return ".addban .addstartwad .autorestart .banwad .broadcast .commands .cpu .delban .delete .delstartwad .download .file .get .help"
                     + " .host .kill .killall .killmine .killinactive .liststartwads .load "
                     + ".notice .off .on .owner .protect .purgebans .query .quit .rcon .save .send .servers .slot .unbanwad .uptime .whoami";
         } else if (isAccountTypeOf(userLevel, MODERATOR)) {
@@ -796,7 +806,7 @@ public class Bot extends ListenerAdapter {
         if (keywords.length < 2) {
             asyncIRCMessage(sender, "Incorrect syntax! Correct usage is .msg your_message");
         } else {
-            String message = Functions.implode(Arrays.copyOfRange(keywords, 1, keywords.length), " ");
+            String message = Joiner.on(" ").join(Arrays.copyOfRange(keywords, 1, keywords.length));
             sendMessageToChannel(message);
         }
     }
@@ -933,6 +943,28 @@ public class Bot extends ListenerAdapter {
         processHost(getUserName(user), userLevel, sender, channel, message, autoRestart, port);
     }
 
+    private void deleteFile(User user, int userLevel, String[] keywords) {
+        if (isValidUser(user) && AccountType.isAccountTypeOf(userLevel, AccountType.ADMIN)) {
+            if (keywords.length == 2) {
+                String fileName = keywords[1];
+                File newFile = new File(cfg_data.bot_wad_directory_path + fileName);
+                if (newFile.exists()) {
+                    if (newFile.delete()) {
+                        sendMessageToChannel("Successfully delete file: " + fileName);
+                    } else {
+                        sendMessageToChannel("Unable to delete file: " + fileName);
+                    }
+                } else {
+                    sendMessageToChannel("No such file: " + fileName);
+                }
+            } else {
+                sendMessageToChannel("Usage: .delete example.wad");
+            }
+        } else {
+            sendMessageToChannel("You are not logged on!");
+        }
+    }
+
     /**
      * Download wad file from internet
      */
@@ -951,7 +983,7 @@ public class Bot extends ListenerAdapter {
                     return;
                 }
 
-                File newFile = new File(fileName);
+                File newFile = new File(cfg_data.bot_wad_directory_path + fileName);
                 if (newFile.exists()) {
                     sendMessageToChannel("File already exists!: " + fileName);
                     return;
@@ -961,10 +993,11 @@ public class Bot extends ListenerAdapter {
                 try {
                     website = new URL(URL);
                     ReadableByteChannel rbc = Channels.newChannel(website.openStream());
-                    FileOutputStream fos = new FileOutputStream(fileName);
+                    FileOutputStream fos = new FileOutputStream(cfg_data.bot_wad_directory_path + fileName);
                     fos.getChannel().transferFrom(rbc, 0, Long.MAX_VALUE);
                     if (newFile.exists()) {
-                        sendMessageToChannel("File downloaded: " + fileName);
+                        String md5 = chkMD5(cfg_data.bot_wad_directory_path + fileName);
+                        sendMessageToChannel("File downloaded: " + fileName + " (" + md5 + ")");
                     }
                 } catch (MalformedURLException ex) {
                     sendMessageToChannel("Error: " + ex.getMessage());
@@ -978,6 +1011,14 @@ public class Bot extends ListenerAdapter {
         } else {
             sendMessageToChannel("You are not logged on!");
         }
+    }
+
+    public String chkMD5(String filename) throws FileNotFoundException, IOException {
+        String md5;
+        try (FileInputStream fis = new FileInputStream(new File(filename))) {
+            md5 = org.apache.commons.codec.digest.DigestUtils.md5Hex(fis);
+        }
+        return md5;
     }
 
     /**
@@ -1082,7 +1123,7 @@ public class Bot extends ListenerAdapter {
                     ports.add(String.valueOf(s.port));
                 }
                 if (ports.size() > 0) {
-                    sendMessageToChannel(Functions.pluralize("Killed " + ports.size() + " server{s} (" + Functions.implode(ports, ", ") + ")", ports.size()));
+                    sendMessageToChannel(Functions.pluralize("Killed " + ports.size() + " server{s} (" + Joiner.on(", ").join(ports) + ")", ports.size()));
                 } else {
                     sendMessageToChannel("You do not have any servers running.");
                 }
@@ -1146,7 +1187,7 @@ public class Bot extends ListenerAdapter {
                     if (ports.isEmpty()) {
                         sendMessageToChannel("No servers were killed.");
                     } else {
-                        sendMessageToChannel(Functions.pluralize("Killed " + ports.size() + " server{s} (" + Functions.implode(ports, ", ") + ")", ports.size()));
+                        sendMessageToChannel(Functions.pluralize("Killed " + ports.size() + " server{s} (" + Joiner.on(" ").join(ports) + ")", ports.size()));
                     }
                 } else {
                     sendMessageToChannel("Using zero or less for .killinactive is not allowed.");
@@ -1268,7 +1309,7 @@ public class Bot extends ListenerAdapter {
                         if (!getUserName(user).isEmpty() && isAccountTypeOf(userLevel, MODERATOR, ADMIN)) {
                             asyncIRCMessage(sender, "RCON: " + s.rcon_password);
                             asyncIRCMessage(sender, "ID: " + s.server_id);
-                            asyncIRCMessage(sender, "LOG: http://cnaude.org/logs/" + s.server_id + ".txt");
+                            asyncIRCMessage(sender, "LOG: " + cfg_data.bot_logs_url + s.server_id + ".txt");
                         } else {
                             asyncIRCMessage(sender, "You do not own this server.");
                         }
@@ -1306,11 +1347,33 @@ public class Bot extends ListenerAdapter {
         List<Server> serverList = getUserServers(user);
         if (serverList != null && serverList.size() > 0) {
             for (Server server : serverList) {
-                sendMessageToChannel(server.port + ": " + server.servername + ((server.wads != null)
-                        ? " with wads " + Functions.implode(server.wads, ", ") : ""));
+                processServer(server);
             }
         } else {
             sendMessageToChannel("User " + user.getNick() + " has no servers running.");
+        }
+    }
+
+    /**
+     * Sends a message to the channel with a list of servers from the user
+     *
+     * @param keywords String[] - the message
+     */
+    private void processServer(Server server) {
+        sendMessageToChannel(server.port + " - " + server.username + " - " + server.servername
+                + (server.wads.isEmpty() ? "" : " - [Wads: " + Joiner.on(", ").join(server.wads) + "]")
+                + ((server.maplist.isEmpty()) ? "" : " - [Maps: " + Joiner.on(", ").join(server.maplist) + "]")
+        );
+    }
+
+    /**
+     * Sends a message to the channel with a list of all servers
+     *
+     * @param keywords String[] - the message
+     */
+    private void processServers() {
+        for (Server server : servers) {
+            processServer(server);
         }
     }
 
@@ -1359,17 +1422,17 @@ public class Bot extends ListenerAdapter {
             switch (keywords[0].toLowerCase()) {
                 case ".addban":
                     if (isAccountTypeOf(userLevel, MODERATOR, ADMIN) && keywords.length > 1) {
-                        MySQL.addBan(message.split(" ")[1], Functions.implode(Arrays.copyOfRange(message.split(" "), 2, message.split(" ").length), " "), nick);
+                        MySQL.addBan(message.split(" ")[1], Joiner.on(" ").join(Arrays.copyOfRange(message.split(" "), 2, message.split(" ").length)), nick);
                     }
                     break;
                 case ".addstartwad":
                     if (isAccountTypeOf(userLevel, MODERATOR, ADMIN) && keywords.length > 1) {
-                        addExtraWad(Functions.implode(Arrays.copyOfRange(message.split(" "), 1, message.split(" ").length), " "), nick);
+                        addExtraWad(Joiner.on(" ").join(Arrays.copyOfRange(message.split(" "), 1, message.split(" ").length)), nick);
                     }
                     break;
                 case ".delstartwad":
                     if (isAccountTypeOf(userLevel, MODERATOR, ADMIN) && keywords.length > 1) {
-                        deleteExtraWad(Functions.implode(Arrays.copyOfRange(message.split(" "), 1, message.split(" ").length), " "), nick);
+                        deleteExtraWad(Joiner.on(" ").join(Arrays.copyOfRange(message.split(" "), 1, message.split(" ").length)), nick);
                     }
                     break;
                 case ".rcon":
@@ -1386,12 +1449,12 @@ public class Bot extends ListenerAdapter {
                     break;
                 case ".banwad":
                     if (isAccountTypeOf(userLevel, MODERATOR, ADMIN)) {
-                        MySQL.addWadToBlacklist(Functions.implode(Arrays.copyOfRange(keywords, 1, keywords.length), " "), nick);
+                        MySQL.addWadToBlacklist(Joiner.on(" ").join(Arrays.copyOfRange(keywords, 1, keywords.length)), nick);
                     }
                     break;
                 case ".unbanwad":
                     if (isAccountTypeOf(userLevel, MODERATOR, ADMIN)) {
-                        MySQL.removeWadFromBlacklist(Functions.implode(Arrays.copyOfRange(keywords, 1, keywords.length), " "), nick);
+                        MySQL.removeWadFromBlacklist(Joiner.on(" ").join(Arrays.copyOfRange(keywords, 1, keywords.length)), nick);
                     }
                     break;
                 case ".delban":
@@ -1411,7 +1474,7 @@ public class Bot extends ListenerAdapter {
                     break;
                 case ".raw":
                     if (isAccountTypeOf(userLevel, ADMIN)) {
-                        bot.sendRaw().rawLineNow(Functions.implode(Arrays.copyOfRange(keywords, 1, keywords.length), " "));
+                        bot.sendRaw().rawLineNow(Joiner.on(" ").join(Arrays.copyOfRange(keywords, 1, keywords.length)));
                     }
                 case ".rejoin":
                     if (isAccountTypeOf(userLevel, ADMIN)) {
@@ -1455,17 +1518,25 @@ public class Bot extends ListenerAdapter {
      */
     @Override
     public void onJoin(JoinEvent event) {
+        String channel = event.getChannel().getName();
+        String nick = event.getUser().getNick();
         logMessage(LOGLEVEL_NORMAL, event.getUser().getNick() + " has joined (" + event.getUser().getLogin() + "@" + event.getUser().getHostmask() + ")");
-        //expireSession(event.getUser());
+        if (!channel.equalsIgnoreCase(cfg_data.ircChannel)) {
+            if (nick.equalsIgnoreCase(bot.getNick())) {
+                logMessage(LOGLEVEL_NORMAL, "Leaving invalid channel: " + channel);
+                event.getChannel().send().part("How did I get here?");
+            }
+        }
     }
 
-    /**
-     * Handles channel part event
-     *
-     * @param event
-     */
-    @Override
-    public void onPart(PartEvent event) {
+
+/**
+ * Handles channel part event
+ *
+ * @param event
+ */
+@Override
+        public void onPart(PartEvent event) {
         logMessage(LOGLEVEL_NORMAL, event.getUser().getNick() + " has left (" + event.getReason() + ")");
         //expireSession(event.getUser());
     }
@@ -1476,7 +1547,7 @@ public class Bot extends ListenerAdapter {
      * @param event
      */
     @Override
-    public void onQuit(QuitEvent event) {
+        public void onQuit(QuitEvent event) {
         logMessage(LOGLEVEL_NORMAL, event.getUser().getNick() + " has quit (" + event.getReason() + ")");
         //expireSession(event.getUser());
     }
@@ -1532,16 +1603,26 @@ public class Bot extends ListenerAdapter {
         ConsoleReader reader;
         try {
             reader = new ConsoleReader();
-        } catch (IOException ex) {
-            java.util.logging.Logger.getLogger(Bot.class.getName()).log(Level.SEVERE, null, ex);
-            return;
+        
+
+} catch (IOException ex) {
+            java.util.logging.Logger.getLogger(Bot.class  
+
+    .getName()).log(Level.SEVERE, null, ex);
+
+return;
         }
         reader.setBellEnabled(false);
         try {
             reader.setDebug(new PrintWriter(new FileWriter("writer.debug", true)));
-        } catch (IOException ex) {
-            java.util.logging.Logger.getLogger(Bot.class.getName()).log(Level.SEVERE, null, ex);
-            return;
+        
+
+} catch (IOException ex) {
+            java.util.logging.Logger.getLogger(Bot.class  
+
+    .getName()).log(Level.SEVERE, null, ex);
+
+return;
         }
 
         String line;
@@ -1559,8 +1640,12 @@ public class Bot extends ListenerAdapter {
                 if (line.equalsIgnoreCase("irc connect")) {
                     try {
                         b.bot.startBot();
-                    } catch (IrcException ex) {
-                        java.util.logging.Logger.getLogger(Bot.class.getName()).log(Level.SEVERE, null, ex);
+                    
+
+} catch (IrcException ex) {
+                        java.util.logging.Logger.getLogger(Bot.class  
+
+.getName()).log(Level.SEVERE, null, ex);
                     }
                 }
                 if (line.equalsIgnoreCase("quit") || line.equalsIgnoreCase("exit")) {
@@ -1571,10 +1656,14 @@ public class Bot extends ListenerAdapter {
                     b.botWatcher.cancel();
                     b.processQuit(ADMIN);
                     break;
-                }
+                
+
+}
             }
         } catch (IOException ex) {
-            java.util.logging.Logger.getLogger(Bot.class.getName()).log(Level.SEVERE, null, ex);
+            java.util.logging.Logger.getLogger(Bot.class  
+
+.getName()).log(Level.SEVERE, null, ex);
         }
     }
 
@@ -1602,7 +1691,8 @@ public class Bot extends ListenerAdapter {
      * @param event
      */
     @Override
-    public void onConnect(ConnectEvent event) {
+        public void onConnect(ConnectEvent event) {
+        logMessage(LOGLEVEL_IMPORTANT, "Connected to IRC.");
         this.setConnected(true);
     }
 
@@ -1612,7 +1702,8 @@ public class Bot extends ListenerAdapter {
      * @param event
      */
     @Override
-    public void onDisconnect(DisconnectEvent event) {
+        public void onDisconnect(DisconnectEvent event) {
+        logMessage(LOGLEVEL_IMPORTANT, "Disconnected from IRC.");
         this.setConnected(false);
     }
 

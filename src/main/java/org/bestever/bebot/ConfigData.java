@@ -168,6 +168,11 @@ public class ConfigData {
      * The URL for wad file downloader
      */
     public String bot_wad_url;
+    
+    /**
+     * The URL for bot logs
+     */
+    public String bot_logs_url;
 
     /**
      * Contains the file name of the executable, in linux this would be
@@ -307,6 +312,7 @@ public class ConfigData {
         this.bot_accountfile = bot.get("accountfile");
         this.bot_logfile = bot.get("logfile");
         this.bot_wad_url = bot.get("wad_page");
+        this.bot_logs_url = bot.get("logs_url");
         this.bot_loglevel = Integer.parseInt(bot.get("loglevel"));
         this.bot_max_port = Integer.parseInt(bot.get("max_port"));
         this.bot_min_port = Integer.parseInt(bot.get("min_port"));
