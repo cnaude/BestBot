@@ -350,7 +350,7 @@ public class ServerProcess extends Thread {
                 }
                 
                 // Catch player chat messages
-                Matcher m = Pattern.compile("^(\\w+): (.*)").matcher(strLine);
+                Matcher m = Pattern.compile("^(.*): (.*)").matcher(strLine);
                 if (m.find()) {
                     String player = m.group(1);
                     if (server.playerList.contains(player)) {
@@ -359,13 +359,13 @@ public class ServerProcess extends Thread {
                     }
                 }
 
-                m = Pattern.compile("^\\w+ joined the game\\.").matcher(strLine);
+                m = Pattern.compile("^(.*) joined the game\\.").matcher(strLine);
                 if (m.find()) {
                     last_activity = System.currentTimeMillis();
                     bot.sendMessageToChannel("[" + server.servername + "] " + strLine);
                 }
 
-                m = Pattern.compile("(\\w+) has connected\\.").matcher(strLine);
+                m = Pattern.compile("(.*) has connected\\.").matcher(strLine);
                 if (m.find()) {
                     String player = m.group(1);
                     if (!server.playerList.contains(player)) {
@@ -375,7 +375,7 @@ public class ServerProcess extends Thread {
                     bot.sendMessageToChannel("[" + server.servername + "] " + strLine);
                 }
 
-                m = Pattern.compile("^client (\\w+) disconnected\\.").matcher(strLine);
+                m = Pattern.compile("^client (.*) disconnected\\.").matcher(strLine);
                 if (m.find()) {
                     String player = m.group(1);
                     if (server.playerList.contains(player)) {
@@ -384,13 +384,26 @@ public class ServerProcess extends Thread {
                     bot.sendMessageToChannel("[" + server.servername + "] " + strLine);
                 }
 
-                m = Pattern.compile("^\\w+ wins!").matcher(strLine);
+                m = Pattern.compile("^(.*) wins!").matcher(strLine);
                 if (m.find()) {
                     bot.sendMessageToChannel("[" + server.servername + "] " + strLine);
                 }
                 
-                m = Pattern.compile("^\\w+ exited the level.").matcher(strLine);
+                m = Pattern.compile("^(.*) exited the level.").matcher(strLine);
                 if (m.find()) {
+                    bot.sendMessageToChannel("[" + server.servername + "] " + strLine);
+                }
+                
+                m = Pattern.compile("^(.*) is now known as (.*)").matcher(strLine);
+                if (m.find()) {
+                    String oldName = m.group(1);
+                    String newName = m.group(2);
+                    if (!server.playerList.contains(newName)) {
+                        server.playerList.add(newName);
+                    }
+                    if (server.playerList.contains(oldName)) {
+                        server.playerList.remove(oldName);
+                    }
                     bot.sendMessageToChannel("[" + server.servername + "] " + strLine);
                 }
                 

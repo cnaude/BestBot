@@ -15,6 +15,7 @@
 package org.bestever.bebot;
 
 import com.google.common.base.Joiner;
+import com.google.common.collect.ImmutableSortedSet;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -27,8 +28,10 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
+import java.text.Collator;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -64,6 +67,7 @@ import org.pircbotx.hooks.events.MessageEvent;
 import org.pircbotx.hooks.events.PartEvent;
 import org.pircbotx.hooks.events.PrivateMessageEvent;
 import org.pircbotx.hooks.events.QuitEvent;
+import org.pircbotx.hooks.events.TopicEvent;
 
 /**
  * This is where the bot methods are run and handling of channel/PM input are
@@ -566,22 +570,22 @@ public class Bot extends ListenerAdapter {
             // Generate an array of keywords from the message
             String[] keywords = event.getMessage().split(" ");
 
-            int userLevel = MySQL.getLevel(getUserName(user));
+            int userlevel = MySQL.getLevel(getUserName(user));
             switch (keywords[0].toLowerCase()) {
                 case ".autorestart":
-                    toggleAutoRestart(userLevel, keywords);
+                    toggleAutoRestart(userlevel, keywords);
                     break;
                 case ".broadcast":
-                    globalBroadcast(userLevel, keywords);
+                    globalBroadcast(userlevel, keywords);
                     break;
                 case ".commands":
-                    sendMessageToChannel("Allowed commands: " + processCommands(userLevel));
+                    sendMessageToChannel("Allowed commands: " + processCommands(userlevel));
                     break;
                 case ".cpu":
                     sendMessageToChannel(getServerCPU());
                     break;
                 case ".disconnect":
-                    if (isAccountTypeOf(userLevel, ADMIN)) {
+                    if (isAccountTypeOf(userlevel, ADMIN)) {
                         bot.sendIRC().quitServer("Good bye!");
                     }
                     break;
@@ -589,13 +593,13 @@ public class Bot extends ListenerAdapter {
                     processFile(keywords, channel);
                     break;
                 case ".get":
-                    processGet(userLevel, keywords);
+                    processGet(userlevel, keywords);
                     break;
                 case ".delete":
-                    deleteFile(event.getUser(), userLevel, keywords);
+                    deleteFile(event.getUser(), userlevel, keywords);
                     break;
                 case ".download":
-                    downloadFile(event.getUser(), userLevel, keywords);
+                    downloadFile(event.getUser(), userlevel, keywords);
                     break;
                 case ".help":
                     if (cfg_data.bot_help.isEmpty()) {
@@ -605,67 +609,70 @@ public class Bot extends ListenerAdapter {
                     }
                     break;
                 case ".host":
-                    processHost(event.getUser(), userLevel, nick, channel, message, false, getMinPort());
+                    processHost(event.getUser(), userlevel, nick, channel, message, false, getMinPort());
                     break;
                 case ".kill":
-                    processKill(event.getUser(), userLevel, keywords);
+                    processKill(event.getUser(), userlevel, keywords);
                     break;
                 case ".killall":
-                    processKillAll(userLevel);
+                    processKillAll(userlevel);
                     break;
                 case ".killmine":
-                    processKillMine(event.getUser(), userLevel);
+                    processKillMine(event.getUser(), userlevel);
                     break;
                 case ".list":
                     listPlayers();
                     break;
                 case ".killinactive":
-                    processKillInactive(userLevel, keywords);
+                    processKillInactive(userlevel, keywords);
                     break;
                 case ".liststartwads":
                     sendMessageToChannel("These wads are automatically loaded when a server is started: " + Joiner.on(", ").join(cfg_data.bot_extra_wads));
                     break;
                 case ".load":
-                    MySQL.loadSlot(getUserName(user), keywords, userLevel, channel, nick);
+                    MySQL.loadSlot(getUserName(user), keywords, userlevel, channel, nick);
                     break;
                 case ".notice":
-                    setNotice(keywords, userLevel);
+                    setNotice(keywords, userlevel);
                     break;
                 case ".off":
-                    processOff(userLevel);
+                    processOff(userlevel);
+                    break;
+                case ".op":
+                    op(user);
                     break;
                 case ".on":
-                    processOn(userLevel);
+                    processOn(userlevel);
                     break;
                 case ".owner":
-                    processOwner(event.getUser(), userLevel, keywords);
+                    processOwner(event.getUser(), userlevel, keywords);
                     break;
                 case ".protect":
-                    protectServer(userLevel, keywords);
+                    protectServer(userlevel, keywords);
                     break;
                 case ".query":
-                    handleQuery(userLevel, keywords);
+                    handleQuery(userlevel, keywords);
                     break;
                 case ".quit":
-                    processQuit(userLevel);
+                    processQuit(userlevel);
                     break;
                 case ".rcon":
-                    if (isAccountTypeOf(userLevel, ADMIN, MODERATOR, REGISTERED)) {
+                    if (isAccountTypeOf(userlevel, ADMIN, MODERATOR, REGISTERED)) {
                         sendMessageToChannel("Please PM the bot for the rcon.");
                     }
                     break;
                 case ".reloadconfig":
-                    if (isAccountTypeOf(userLevel, ADMIN)) {
+                    if (isAccountTypeOf(userlevel, ADMIN)) {
                         reloadConfigFile();
                         sendMessageToChannel("Configuration file has been successfully reloaded.");
                     }
                     break;
                 case ".save":
-                    MySQL.saveSlot(user, keywords);
+                    MySQL.saveSlot(user, message);
                     break;
                 case ".send":
-                    if (isAccountTypeOf(userLevel, ADMIN, MODERATOR)) {
-                        sendCommand(user, userLevel, keywords, cfg_data.ircChannel);
+                    if (isAccountTypeOf(userlevel, ADMIN, MODERATOR)) {
+                        sendCommand(user, userlevel, keywords, cfg_data.ircChannel);
                     }
                     break;
                 case ".myservers":
@@ -696,6 +703,20 @@ public class Bot extends ListenerAdapter {
     }
 
     /**
+     * Op user if level high enough
+     */
+    private void op(User user) {
+        if (user.getChannelsOpIn().contains(getChannel(cfg_data.ircChannel))) {
+            return;
+        }
+        if (AccountType.isAccountTypeOf(MySQL.getLevel(getUserName(user)), AccountType.MODERATOR)) {
+            op(cfg_data.ircChannel, user.getNick());
+        } else {
+            sendMessageToChannel("Sorry " + user.getNick() + " I can't do that.");
+        }
+    }
+
+    /**
      * Broadcasts the uptime of a specific server
      *
      * @param port String - port number
@@ -722,14 +743,14 @@ public class Bot extends ListenerAdapter {
      * Sets the notice (global announcement to all servers)
      *
      * @param keywords String[] - array of words (message)
-     * @param userLevel int - bitmask level
+     * @param userlevel int - bitmask level
      */
-    public void setNotice(String[] keywords, int userLevel) {
+    public void setNotice(String[] keywords, int userlevel) {
         if (keywords.length == 1) {
             sendMessageToChannel("Notice is: " + cfg_data.bot_notice);
             return;
         }
-        if (isAccountTypeOf(userLevel, ADMIN, MODERATOR)) {
+        if (isAccountTypeOf(userlevel, ADMIN, MODERATOR)) {
             cfg_data.bot_notice = Joiner.on(" ").join(Arrays.copyOfRange(keywords, 1, keywords.length));
             sendMessageToChannel("New notice has been set.");
         } else {
@@ -777,19 +798,19 @@ public class Bot extends ListenerAdapter {
     /**
      * This displays commands available for the user
      *
-     * @param userLevel The level based on AccountType enumeration
+     * @param userlevel The level based on AccountType enumeration
      */
-    private String processCommands(int userLevel) {
+    private String processCommands(int userlevel) {
         logMessage(LOGLEVEL_TRIVIAL, "Displaying processComamnds().");
-        if (isAccountTypeOf(userLevel, ADMIN)) {
+        if (isAccountTypeOf(userlevel, ADMIN)) {
             return ".addban .addstartwad .autorestart .banwad .broadcast .commands .cpu .delban .delete .delstartwad .download .file .get .help"
                     + " .host .kill .killall .killmine .killinactive .liststartwads .load "
                     + ".notice .off .on .owner .protect .purgebans .query .quit .rcon .save .send .servers .slot .unbanwad .uptime .whoami";
-        } else if (isAccountTypeOf(userLevel, MODERATOR)) {
+        } else if (isAccountTypeOf(userlevel, MODERATOR)) {
             return ".addban .addstartwad .autorestart .banwad .broadcast .commands .cpu .delban .delstartwad .file .get .help .host"
                     + " .kill .killmine .killinactive .liststartwads .load "
                     + ".notice .owner .protect .purgebans .query .rcon .save .send .servers .slot .unbanwad .uptime .whoami";
-        } else if (isAccountTypeOf(userLevel, REGISTERED)) {
+        } else if (isAccountTypeOf(userlevel, REGISTERED)) {
             return ".commands .cpu .file .get .help .host .kill .killmine .load .owner .query .rcon .save .servers .slot .uptime .whoami";
         } else {
             return "[Not logged in, guests have limited access] .commands .cpu .file .help .servers .uptime .whoami";
@@ -835,12 +856,12 @@ public class Bot extends ListenerAdapter {
     /**
      * Gets a field requested by the user
      *
-     * @param userLevel The user's bitmask level
+     * @param userlevel The user's bitmask level
      * @param keywords The field the user wants
      */
-    private void processGet(int userLevel, String[] keywords) {
+    private void processGet(int userlevel, String[] keywords) {
         logMessage(LOGLEVEL_TRIVIAL, "Displaying processGet().");
-        if (isAccountTypeOf(userLevel, ADMIN, MODERATOR, REGISTERED)) {
+        if (isAccountTypeOf(userlevel, ADMIN, MODERATOR, REGISTERED)) {
             if (keywords.length != 3) {
                 sendMessageToChannel("Proper syntax: .get <port> <property>");
                 return;
@@ -862,22 +883,22 @@ public class Bot extends ListenerAdapter {
      * Passes the host command off to a static method to create the server
      *
      * @param username
-     * @param userLevel The user's bitmask level
+     * @param userlevel The user's bitmask level
      * @param sender * @param hostname IRC data associated with the sender
      * @param channel
      * @param message The entire message to be processed
      * @param autoRestart
      * @param port
      */
-    public void processHost(String username, int userLevel, String sender, String channel, String message, boolean autoRestart, int port) {
+    public void processHost(String username, int userlevel, String sender, String channel, String message, boolean autoRestart, int port) {
         logMessage(LOGLEVEL_NORMAL, "Processing the host command for " + username + " with the message \"" + message + "\".");
-        if (botEnabled || isAccountTypeOf(userLevel, ADMIN, MODERATOR)) {
-            if (isAccountTypeOf(userLevel, REGISTERED)) {
+        if (botEnabled || isAccountTypeOf(userlevel, ADMIN, MODERATOR)) {
+            if (isAccountTypeOf(userlevel, REGISTERED)) {
                 int slots = MySQL.getMaxSlots(username);
                 int userServers;
                 userServers = getUserServers(username).size();
                 if (slots > userServers) {
-                    Server.handleHostCommand(username, this, servers, sender, channel, message, userLevel, autoRestart, port);
+                    Server.handleHostCommand(username, this, servers, sender, channel, message, userlevel, autoRestart, port);
                 } else {
                     sendMessageToChannel("You have reached your server limit (" + slots + ")");
                 }
@@ -932,19 +953,19 @@ public class Bot extends ListenerAdapter {
      * Passes the host command off to a static method to create the server
      *
      * @param user
-     * @param userLevel The user's bitmask level
+     * @param userlevel The user's bitmask level
      * @param sender * @param hostname IRC data associated with the sender
      * @param channel
      * @param message The entire message to be processed
      * @param autoRestart
      * @param port
      */
-    public void processHost(User user, int userLevel, String sender, String channel, String message, boolean autoRestart, int port) {
-        processHost(getUserName(user), userLevel, sender, channel, message, autoRestart, port);
+    public void processHost(User user, int userlevel, String sender, String channel, String message, boolean autoRestart, int port) {
+        processHost(getUserName(user), userlevel, sender, channel, message, autoRestart, port);
     }
 
-    private void deleteFile(User user, int userLevel, String[] keywords) {
-        if (isValidUser(user) && AccountType.isAccountTypeOf(userLevel, AccountType.ADMIN)) {
+    private void deleteFile(User user, int userlevel, String[] keywords) {
+        if (isValidUser(user) && AccountType.isAccountTypeOf(userlevel, AccountType.ADMIN)) {
             if (keywords.length == 2) {
                 String fileName = keywords[1];
                 File newFile = new File(cfg_data.bot_wad_directory_path + fileName);
@@ -968,8 +989,8 @@ public class Bot extends ListenerAdapter {
     /**
      * Download wad file from internet
      */
-    private void downloadFile(User user, int userLevel, String[] keywords) {
-        if (isValidUser(user) && AccountType.isAccountTypeOf(userLevel, AccountType.REGISTERED)) {
+    private void downloadFile(User user, int userlevel, String[] keywords) {
+        if (isValidUser(user) && AccountType.isAccountTypeOf(userlevel, AccountType.REGISTERED)) {
             if (keywords.length == 2) {
                 String URL = keywords[1];
                 String fileName;
@@ -1024,11 +1045,11 @@ public class Bot extends ListenerAdapter {
     /**
      * Attempts to kill a server based on the port
      *
-     * @param userLevel The user's bitmask level
+     * @param userlevel The user's bitmask level
      * @param keywords The keywords to be processed
      * @param hostname hostname from the sender
      */
-    private void processKill(User user, int userLevel, String[] keywords) {
+    private void processKill(User user, int userlevel, String[] keywords) {
         logMessage(LOGLEVEL_NORMAL, "Processing kill.");
         // Ensure proper syntax
         if (keywords.length != 2) {
@@ -1049,11 +1070,11 @@ public class Bot extends ListenerAdapter {
         }
 
         // Registered can only kill their own servers
-        if (isAccountTypeOf(userLevel, REGISTERED)) {
+        if (isAccountTypeOf(userlevel, REGISTERED)) {
             if (Functions.isNumeric(keywords[1])) {
                 Server server = getServer(Integer.parseInt(keywords[1]));
                 if (server != null) {
-                    if (!getUserName(user).isEmpty() || isAccountTypeOf(userLevel, MODERATOR, ADMIN)) {
+                    if (!getUserName(user).isEmpty() || isAccountTypeOf(userlevel, MODERATOR, ADMIN)) {
                         if (server.serverprocess != null) {
                             server.auto_restart = false;
                             server.serverprocess.terminateServer();
@@ -1070,7 +1091,7 @@ public class Bot extends ListenerAdapter {
                 sendMessageToChannel("Improper port number.");
             }
             // Admins/mods can kill anything
-        } else if (isAccountTypeOf(userLevel, ADMIN, MODERATOR)) {
+        } else if (isAccountTypeOf(userlevel, ADMIN, MODERATOR)) {
             killServer(keywords[1]); // Can pass string, will process it in the method safely if something goes wrong
         }
     }
@@ -1078,11 +1099,11 @@ public class Bot extends ListenerAdapter {
     /**
      * When requested it will kill every server in the linked list
      *
-     * @param userLevel The user level of the person requesting
+     * @param userlevel The user level of the person requesting
      */
-    private void processKillAll(int userLevel) {
+    private void processKillAll(int userlevel) {
         logMessage(LOGLEVEL_IMPORTANT, "Processing killall.");
-        if (isAccountTypeOf(userLevel, ADMIN)) {
+        if (isAccountTypeOf(userlevel, ADMIN)) {
             // If we use this.servers instead of a temporary list, it will remove the servers from the list while iterating over them
             // This will throw a concurrent modification exception
             // As a temporary solution, we can create a temporary list that will hold the values of the real list at the time it was called
@@ -1107,12 +1128,12 @@ public class Bot extends ListenerAdapter {
      * This will look through the list and kill all the servers that the
      * hostname owns
      *
-     * @param userLevel The level of the user
+     * @param userlevel The level of the user
      * @param hostname The hostname of the person invoking this command
      */
-    private void processKillMine(User user, int userLevel) {
+    private void processKillMine(User user, int userlevel) {
         logMessage(LOGLEVEL_TRIVIAL, "Processing killmine.");
-        if (isAccountTypeOf(userLevel, ADMIN, MODERATOR, REGISTERED)) {
+        if (isAccountTypeOf(userlevel, ADMIN, MODERATOR, REGISTERED)) {
             List<Server> serverList = getUserServers(user);
             if (serverList != null) {
                 ArrayList<String> ports = new ArrayList<>();
@@ -1153,12 +1174,12 @@ public class Bot extends ListenerAdapter {
      * This will kill inactive servers based on the days specified in the second
      * parameter
      *
-     * @param userLevel The user's bitmask level
+     * @param userlevel The user's bitmask level
      * @param keywords The field the user wants
      */
-    private void processKillInactive(int userLevel, String[] keywords) {
+    private void processKillInactive(int userlevel, String[] keywords) {
         logMessage(LOGLEVEL_NORMAL, "Processing a kill of inactive servers.");
-        if (isAccountTypeOf(userLevel, ADMIN, MODERATOR)) {
+        if (isAccountTypeOf(userlevel, ADMIN, MODERATOR)) {
             if (keywords.length < 2) {
                 sendMessageToChannel("Proper syntax: .killinactive <days since> (ex: use .killinactive 3 to kill servers that haven't seen anyone for 3 days)");
                 return;
@@ -1201,12 +1222,12 @@ public class Bot extends ListenerAdapter {
     /**
      * Admins can turn off hosting with this
      *
-     * @param userLevel The user's bitmask level
+     * @param userlevel The user's bitmask level
      */
-    private void processOff(int userLevel) {
+    private void processOff(int userlevel) {
         logMessage(LOGLEVEL_IMPORTANT, "An admin has disabled hosting.");
         if (botEnabled) {
-            if (isAccountTypeOf(userLevel, ADMIN)) {
+            if (isAccountTypeOf(userlevel, ADMIN)) {
                 botEnabled = false;
                 sendMessageToChannel("Bot disabled.");
             }
@@ -1216,12 +1237,12 @@ public class Bot extends ListenerAdapter {
     /**
      * Admins can re-enable hosting with this
      *
-     * @param userLevel The user's bitmask level
+     * @param userlevel The user's bitmask level
      */
-    private void processOn(int userLevel) {
+    private void processOn(int userlevel) {
         logMessage(LOGLEVEL_IMPORTANT, "An admin has re-enabled hosting.");
         if (!botEnabled) {
-            if (isAccountTypeOf(userLevel, ADMIN)) {
+            if (isAccountTypeOf(userlevel, ADMIN)) {
                 botEnabled = true;
                 sendMessageToChannel("Bot enabled.");
             }
@@ -1231,10 +1252,10 @@ public class Bot extends ListenerAdapter {
     /**
      * This checks for who owns the server on the specified port
      *
-     * @param userLevel The level of the user requesting the data
+     * @param userlevel The level of the user requesting the data
      * @param keywords The keywords to pass
      */
-    private void processOwner(User user, int userLevel, String[] keywords) {
+    private void processOwner(User user, int userlevel, String[] keywords) {
         logMessage(LOGLEVEL_DEBUG, "Processing an owner.");
         if (keywords.length == 2) {
             if (Functions.isNumeric(keywords[1])) {
@@ -1255,11 +1276,11 @@ public class Bot extends ListenerAdapter {
     /**
      * Will attempt to query a server and generate a line of text
      *
-     * @param userLevel The level of the user
+     * @param userlevel The level of the user
      * @param keywords The keywords sent
      */
-    private void handleQuery(int userLevel, String[] keywords) {
-        if (isAccountTypeOf(userLevel, ADMIN, MODERATOR, REGISTERED)) {
+    private void handleQuery(int userlevel, String[] keywords) {
+        if (isAccountTypeOf(userlevel, ADMIN, MODERATOR, REGISTERED)) {
             if (keywords.length == 2) {
                 String[] ipFragment = keywords[1].split(":");
                 if (ipFragment.length == 2) {
@@ -1293,20 +1314,20 @@ public class Bot extends ListenerAdapter {
     /**
      * Handles RCON stuff
      *
-     * @param userLevel int - the user's level (permissions)
+     * @param userlevel int - the user's level (permissions)
      * @param keywords String[] - message split by spaces
      * @param sender String - the nickname of the sender
      * @param hostname String - the hostname of the sender
      */
-    private void processRcon(User user, int userLevel, String[] keywords, String sender) {
+    private void processRcon(User user, int userlevel, String[] keywords, String sender) {
         logMessage(LOGLEVEL_NORMAL, "Processing a request for rcon (from " + sender + ").");
-        if (isAccountTypeOf(userLevel, REGISTERED, MODERATOR, ADMIN)) {
+        if (isAccountTypeOf(userlevel, REGISTERED, MODERATOR, ADMIN)) {
             if (keywords.length == 2) {
                 if (Functions.isNumeric(keywords[1])) {
                     int port = Integer.parseInt(keywords[1]);
                     Server s = getServer(port);
                     if (s != null) {
-                        if (!getUserName(user).isEmpty() && isAccountTypeOf(userLevel, MODERATOR, ADMIN)) {
+                        if (!getUserName(user).isEmpty() && isAccountTypeOf(userlevel, MODERATOR, ADMIN)) {
                             asyncIRCMessage(sender, "RCON: " + s.rcon_password);
                             asyncIRCMessage(sender, "ID: " + s.server_id);
                             asyncIRCMessage(sender, "LOG: " + cfg_data.bot_logs_url + s.server_id + ".txt");
@@ -1328,11 +1349,11 @@ public class Bot extends ListenerAdapter {
     /**
      * Invoking this command terminates the bot completely
      *
-     * @param userLevel The user's bitmask level
+     * @param userlevel The user's bitmask level
      */
-    private void processQuit(int userLevel) {
+    private void processQuit(int userlevel) {
         logMessage(LOGLEVEL_CRITICAL, "Requested bot termination. Shutting down program.");
-        if (isAccountTypeOf(userLevel, ADMIN)) {
+        if (isAccountTypeOf(userlevel, ADMIN)) {
             System.exit(0);
         }
     }
@@ -1399,6 +1420,7 @@ public class Bot extends ListenerAdapter {
                     if (MySQL.userLogin(user, keywords[1], keywords[2])) {
                         asyncIRCMessage(nick, "Successfully logged on.");
                         addUserSession(user, keywords[1]);
+                        op(user);
                     } else {
                         asyncIRCMessage(nick, "Invalid username or password!");
                     }
@@ -1418,25 +1440,25 @@ public class Bot extends ListenerAdapter {
         }
 
         if (isValidUser(user)) {
-            int userLevel = MySQL.getLevel(getUserName(user));
+            int userlevel = MySQL.getLevel(getUserName(user));
             switch (keywords[0].toLowerCase()) {
                 case ".addban":
-                    if (isAccountTypeOf(userLevel, MODERATOR, ADMIN) && keywords.length > 1) {
+                    if (isAccountTypeOf(userlevel, MODERATOR, ADMIN) && keywords.length > 1) {
                         MySQL.addBan(message.split(" ")[1], Joiner.on(" ").join(Arrays.copyOfRange(message.split(" "), 2, message.split(" ").length)), nick);
                     }
                     break;
                 case ".addstartwad":
-                    if (isAccountTypeOf(userLevel, MODERATOR, ADMIN) && keywords.length > 1) {
+                    if (isAccountTypeOf(userlevel, MODERATOR, ADMIN) && keywords.length > 1) {
                         addExtraWad(Joiner.on(" ").join(Arrays.copyOfRange(message.split(" "), 1, message.split(" ").length)), nick);
                     }
                     break;
                 case ".delstartwad":
-                    if (isAccountTypeOf(userLevel, MODERATOR, ADMIN) && keywords.length > 1) {
+                    if (isAccountTypeOf(userlevel, MODERATOR, ADMIN) && keywords.length > 1) {
                         deleteExtraWad(Joiner.on(" ").join(Arrays.copyOfRange(message.split(" "), 1, message.split(" ").length)), nick);
                     }
                     break;
                 case ".rcon":
-                    processRcon(user, userLevel, keywords, nick);
+                    processRcon(user, userlevel, keywords, nick);
                     break;
                 case "changepass":
                 case "changepassword":
@@ -1448,36 +1470,36 @@ public class Bot extends ListenerAdapter {
                     }
                     break;
                 case ".banwad":
-                    if (isAccountTypeOf(userLevel, MODERATOR, ADMIN)) {
+                    if (isAccountTypeOf(userlevel, MODERATOR, ADMIN)) {
                         MySQL.addWadToBlacklist(Joiner.on(" ").join(Arrays.copyOfRange(keywords, 1, keywords.length)), nick);
                     }
                     break;
                 case ".unbanwad":
-                    if (isAccountTypeOf(userLevel, MODERATOR, ADMIN)) {
+                    if (isAccountTypeOf(userlevel, MODERATOR, ADMIN)) {
                         MySQL.removeWadFromBlacklist(Joiner.on(" ").join(Arrays.copyOfRange(keywords, 1, keywords.length)), nick);
                     }
                     break;
                 case ".delban":
-                    if (isAccountTypeOf(userLevel, MODERATOR, ADMIN) && keywords.length > 1) {
+                    if (isAccountTypeOf(userlevel, MODERATOR, ADMIN) && keywords.length > 1) {
                         MySQL.delBan(message.split(" ")[1], nick);
                     }
                     break;
                 case ".msg":
-                    if (isAccountTypeOf(userLevel, ADMIN, MODERATOR)) {
+                    if (isAccountTypeOf(userlevel, ADMIN, MODERATOR)) {
                         messageChannel(keywords, nick);
                     }
                     break;
                 case ".purgebans":
-                    if (isAccountTypeOf(userLevel, ADMIN, MODERATOR)) {
+                    if (isAccountTypeOf(userlevel, ADMIN, MODERATOR)) {
                         purgeBans(keywords[1]);
                     }
                     break;
                 case ".raw":
-                    if (isAccountTypeOf(userLevel, ADMIN)) {
+                    if (isAccountTypeOf(userlevel, ADMIN)) {
                         bot.sendRaw().rawLineNow(Joiner.on(" ").join(Arrays.copyOfRange(keywords, 1, keywords.length)));
                     }
                 case ".rejoin":
-                    if (isAccountTypeOf(userLevel, ADMIN)) {
+                    if (isAccountTypeOf(userlevel, ADMIN)) {
                         for (Channel channel : bot.getUserBot().getChannels()) {
                             channel.send().part();
                         }
@@ -1485,8 +1507,8 @@ public class Bot extends ListenerAdapter {
                     }
                     break;
                 case ".send":
-                    if (isAccountTypeOf(userLevel, ADMIN, MODERATOR)) {
-                        sendCommand(user, userLevel, keywords, nick);
+                    if (isAccountTypeOf(userlevel, ADMIN, MODERATOR)) {
+                        sendCommand(user, userlevel, keywords, nick);
                     }
                     break;
                 default:
@@ -1520,8 +1542,13 @@ public class Bot extends ListenerAdapter {
     public void onJoin(JoinEvent event) {
         String channel = event.getChannel().getName();
         String nick = event.getUser().getNick();
+        User user = event.getUser();
         logMessage(LOGLEVEL_NORMAL, event.getUser().getNick() + " has joined (" + event.getUser().getLogin() + "@" + event.getUser().getHostmask() + ")");
-        if (!channel.equalsIgnoreCase(cfg_data.ircChannel)) {
+        if (channel.equalsIgnoreCase(cfg_data.ircChannel)) {
+            if (!nick.equalsIgnoreCase(bot.getNick())) {
+                op(user);
+            }
+        } else if (!channel.equalsIgnoreCase(cfg_data.ircChannel)) {
             if (nick.equalsIgnoreCase(bot.getNick())) {
                 logMessage(LOGLEVEL_NORMAL, "Leaving invalid channel: " + channel);
                 event.getChannel().send().part("How did I get here?");
@@ -1529,14 +1556,32 @@ public class Bot extends ListenerAdapter {
         }
     }
 
+    /**
+     * Handles channel topic events
+     *
+     * @param event
+     */
+    @Override
+    public void onTopic(TopicEvent event) {                
+        String topic = event.getTopic();        
+        if (event.getChannel().getName().equalsIgnoreCase(cfg_data.ircChannel)) {
+            if (!event.getUser().getNick().equalsIgnoreCase(bot.getNick())) {
+                if (topic != null) {
+                    if (topic.isEmpty()) {
+                        event.getChannel().send().setTopic(cfg_data.ircTopic);
+                    }
+                }
+            }
+        }
+    }
 
-/**
- * Handles channel part event
- *
- * @param event
- */
-@Override
-        public void onPart(PartEvent event) {
+    /**
+     * Handles channel part event
+     *
+     * @param event
+     */
+    @Override
+    public void onPart(PartEvent event) {
         logMessage(LOGLEVEL_NORMAL, event.getUser().getNick() + " has left (" + event.getReason() + ")");
         //expireSession(event.getUser());
     }
@@ -1547,7 +1592,7 @@ public class Bot extends ListenerAdapter {
      * @param event
      */
     @Override
-        public void onQuit(QuitEvent event) {
+    public void onQuit(QuitEvent event) {
         logMessage(LOGLEVEL_NORMAL, event.getUser().getNick() + " has quit (" + event.getReason() + ")");
         //expireSession(event.getUser());
     }
@@ -1598,31 +1643,25 @@ public class Bot extends ListenerAdapter {
         Bot b = new Bot(cfg_data);
         b.config_file = args[0];
 
-        Character mask = null;
-        String trigger = null;
         ConsoleReader reader;
         try {
             reader = new ConsoleReader();
-        
 
-} catch (IOException ex) {
-            java.util.logging.Logger.getLogger(Bot.class  
+        } catch (IOException ex) {
+            java.util.logging.Logger.getLogger(Bot.class
+                    .getName()).log(Level.SEVERE, null, ex);
 
-    .getName()).log(Level.SEVERE, null, ex);
-
-return;
+            return;
         }
         reader.setBellEnabled(false);
         try {
             reader.setDebug(new PrintWriter(new FileWriter("writer.debug", true)));
-        
 
-} catch (IOException ex) {
-            java.util.logging.Logger.getLogger(Bot.class  
+        } catch (IOException ex) {
+            java.util.logging.Logger.getLogger(Bot.class
+                    .getName()).log(Level.SEVERE, null, ex);
 
-    .getName()).log(Level.SEVERE, null, ex);
-
-return;
+            return;
         }
 
         String line;
@@ -1631,22 +1670,64 @@ return;
         try {
             while ((line = reader.readLine("DoomBot> ")) != null) {
                 out.flush();
-                if ((trigger != null) && (line.compareTo(trigger) == 0)) {
-                    line = reader.readLine("password> ", mask);
-                }
-                if (line.equalsIgnoreCase("irc disconnect")) {
+                if (line.equalsIgnoreCase("disconnect")) {
                     b.bot.sendIRC().quitServer("Disconnecting via console.");
                 }
-                if (line.equalsIgnoreCase("irc connect")) {
+                if (line.equalsIgnoreCase("connect")) {
                     try {
                         b.bot.startBot();
-                    
-
-} catch (IrcException ex) {
-                        java.util.logging.Logger.getLogger(Bot.class  
-
-.getName()).log(Level.SEVERE, null, ex);
+                    } catch (IrcException ex) {
+                        java.util.logging.Logger.getLogger(Bot.class
+                                .getName()).log(Level.SEVERE, null, ex);
                     }
+                }
+                if (line.startsWith("op ")) {
+                    String opArgs[] = line.split(" ");
+                    if (opArgs.length > 1) {
+                        for (int i = 1; i < opArgs.length; i++) {
+                            System.out.printf("** Giving ops to %s in %s\n", opArgs[i], cfg_data.ircChannel);
+                            b.op(cfg_data.ircChannel, opArgs[i]);
+                        }
+                    }
+                }
+                if (line.startsWith("deop ")) {
+                    String opArgs[] = line.split(" ");
+                    if (opArgs.length > 1) {
+                        for (int i = 1; i < opArgs.length; i++) {
+                            System.out.printf("** Removing ops from %s in %s\n", opArgs[i], cfg_data.ircChannel);
+                            b.deOp(cfg_data.ircChannel, opArgs[i]);
+                        }
+                    }
+                }
+                if (line.startsWith("kick ")) {
+                    String opArgs[] = line.split(" ");
+                    if (opArgs.length > 1) {
+                        for (int i = 1; i < opArgs.length; i++) {
+                            System.out.printf("** Kicking %s from %s\n", opArgs[i], cfg_data.ircChannel);
+                            b.kick(cfg_data.ircChannel, opArgs[i]);
+                        }
+                    }
+                }
+                if (line.startsWith("voice ")) {
+                    String opArgs[] = line.split(" ");
+                    if (opArgs.length > 1) {
+                        for (int i = 1; i < opArgs.length; i++) {
+                            System.out.printf("** Giving voice to %s in %s\n", opArgs[i], cfg_data.ircChannel);
+                            b.voice(cfg_data.ircChannel, opArgs[i]);
+                        }
+                    }
+                }
+                if (line.startsWith("devoice ")) {
+                    String opArgs[] = line.split(" ");
+                    if (opArgs.length > 1) {
+                        for (int i = 1; i < opArgs.length; i++) {
+                            System.out.printf("** Removing voice from %s in %s\n", opArgs[i], cfg_data.ircChannel);
+                            b.deVoice(cfg_data.ircChannel, opArgs[i]);
+                        }
+                    }
+                }
+                if (line.equalsIgnoreCase("list")) {
+                    b.listUsers();
                 }
                 if (line.equalsIgnoreCase("quit") || line.equalsIgnoreCase("exit")) {
                     b.pircBotThread.cancel();
@@ -1656,14 +1737,12 @@ return;
                     b.botWatcher.cancel();
                     b.processQuit(ADMIN);
                     break;
-                
 
-}
+                }
             }
         } catch (IOException ex) {
-            java.util.logging.Logger.getLogger(Bot.class  
-
-.getName()).log(Level.SEVERE, null, ex);
+            java.util.logging.Logger.getLogger(Bot.class
+                    .getName()).log(Level.SEVERE, null, ex);
         }
     }
 
@@ -1674,6 +1753,162 @@ return;
         if (this.isConnected()) {
             bot.sendIRC().message(target, message);
         }
+    }
+
+    /**
+     *
+     * @param channelName
+     * @param nick
+     */
+    public void op(String channelName, String nick) {
+        Channel channel;
+        channel = getChannel(channelName);
+        if (channel != null) {
+            for (User user : channel.getUsers()) {
+                if (user.getNick().equals(nick)) {
+                    channel.send().op(user);
+                    return;
+                }
+            }
+        }
+    }
+
+    public Channel getChannel(String channelName) {
+        Channel channel = null;
+        for (Channel c : getChannels()) {
+            if (c.getName().equalsIgnoreCase(channelName)) {
+                return c;
+            }
+        }
+        return channel;
+    }
+
+    public ImmutableSortedSet<Channel> getChannels() {
+        if (bot.getNick().isEmpty()) {
+            return ImmutableSortedSet.<Channel>naturalOrder().build();
+        }
+        return bot.getUserBot().getChannels();
+    }
+
+    /**
+     *
+     * @param channelName
+     * @param nick
+     */
+    public void deOp(String channelName, String nick) {
+        Channel channel;
+        channel = getChannel(channelName);
+        if (channel != null) {
+            for (User user : channel.getUsers()) {
+                if (user.getNick().equals(nick)) {
+                    channel.send().deOp(user);
+                    return;
+                }
+            }
+        }
+    }
+
+    /**
+     *
+     * @param channelName
+     * @param nick
+     */
+    public void deVoice(String channelName, String nick) {
+        Channel channel;
+        channel = getChannel(channelName);
+        if (channel != null) {
+            for (User user : channel.getUsers()) {
+                if (user.getNick().equals(nick)) {
+                    channel.send().deVoice(user);
+                    return;
+                }
+            }
+        }
+    }
+
+    /**
+     *
+     * @param channelName
+     * @param nick
+     */
+    public void kick(String channelName, String nick) {
+        Channel channel;
+        channel = getChannel(channelName);
+        if (channel != null) {
+            for (User user : channel.getUsers()) {
+                if (user.getNick().equals(nick)) {
+                    channel.send().kick(user);
+                    return;
+                }
+            }
+        }
+    }
+
+    /**
+     *
+     * @param channelName
+     * @param nick
+     */
+    public void voice(String channelName, String nick) {
+        Channel channel;
+        channel = getChannel(channelName);
+        if (channel != null) {
+            for (User user : channel.getUsers()) {
+                if (user.getNick().equals(nick)) {
+                    channel.send().voice(user);
+                    return;
+                }
+            }
+        }
+    }
+
+    /**
+     *
+     */
+    public void listUsers() {
+        if (!this.isConnected()) {
+            return;
+        }
+        List<String> channelUsers = new ArrayList<>();
+        Channel channel = getChannel(cfg_data.ircChannel);
+        if (channel != null) {
+            System.out.printf("** Users in %s **\n", channel.getName());
+            for (User user : channel.getUsers()) {
+                String nick = user.getNick();
+                nick = getNickPrefix(user, channel) + nick;
+                if (user.isAway()) {
+                    nick = nick + " | Away";
+                }
+                channelUsers.add(nick);
+            }
+            Collections.sort(channelUsers, Collator.getInstance());
+            for (String userName : channelUsers) {
+                System.out.printf(" %s\n", userName);
+            }
+        } else {
+            System.out.println("Invalid channel: " + cfg_data.ircChannel);
+        }
+    }
+
+    public String getNickPrefix(User user, Channel channel) {
+        try {
+            if (user.getChannels() != null) {
+                if (user.isIrcop()) {
+                    return "~";
+                } else if (user.getChannelsSuperOpIn().contains(channel)) {
+                    return "&";
+                } else if (user.getChannelsOpIn().contains(channel)) {
+                    return "@";
+                } else if (user.getChannelsHalfOpIn().contains(channel)) {
+                    return "%";
+                } else if (user.getChannelsVoiceIn().contains(channel)) {
+                    return "+";
+                }
+            }
+        } catch (Exception ex) {
+            System.out.println("Error: " + ex.getMessage());
+        }
+        return "";
     }
 
     /*
@@ -1691,8 +1926,14 @@ return;
      * @param event
      */
     @Override
-        public void onConnect(ConnectEvent event) {
+    public void onConnect(ConnectEvent event) {
         logMessage(LOGLEVEL_IMPORTANT, "Connected to IRC.");
+        String motd = bot.getServerInfo().getMotd();
+        if (motd == null) {
+            System.out.println("No IRC motd.");
+        } else {
+            System.out.println(bot.getServerInfo().getMotd());
+        }
         this.setConnected(true);
     }
 
@@ -1702,7 +1943,7 @@ return;
      * @param event
      */
     @Override
-        public void onDisconnect(DisconnectEvent event) {
+    public void onDisconnect(DisconnectEvent event) {
         logMessage(LOGLEVEL_IMPORTANT, "Disconnected from IRC.");
         this.setConnected(false);
     }

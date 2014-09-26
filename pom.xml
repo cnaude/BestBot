@@ -22,10 +22,10 @@
             <url>https://oss.sonatype.org/content/groups/public</url>
             <releases> 
                 <!-- set to true if you wish to fetch releases from this repo too. -->
-                <enabled>false</enabled>
+                <enabled>true</enabled>
             </releases> 
             <snapshots>
-                <enabled>false</enabled>
+                <enabled>true</enabled>
             </snapshots>
         </repository>
         
@@ -56,7 +56,7 @@
         <dependency>
             <groupId>org.yaml</groupId>
             <artifactId>snakeyaml</artifactId>
-            <version>1.14-SNAPSHOT</version>
+            <version>1.15-SNAPSHOT</version>
         </dependency>
         
         <dependency>
@@ -155,7 +155,7 @@
                             <tasks>                                                                              
                                 <copy file="../${project.name}/target/${project.name}-${project.version}.jar" tofile="../${project.name}/target/${project.name}.jar"/>
                                 <exec dir="../${project.name}/target" executable="scp">
-                                    <arg line="${project.name}.jar cnaude@h.cnaude.org:ds/"/>
+                                    <arg line="${project.name}.jar cnaude@h.cnaude.org:/tmp/"/>
                                 </exec>
                             </tasks>
                         </configuration>

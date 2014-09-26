@@ -18,7 +18,7 @@ public class AccountType {
 
     public static final int GUEST = 0;
     public static final int REGISTERED = 1;
-    public static final int MODERATOR = 2;
+    public static final int MODERATOR = 2;    
     public static final int ADMIN = 4;
     public static final int RCON = 8;
 

@@ -568,15 +568,17 @@ public class MySQL {
      * Saves a server host command to a row
      *
      * @param user
-     * @param words String Array - array of words
+     * @param message
      */
-    public static void saveSlot(User user, String[] words) {
+    public static void saveSlot(User user, String message) {
         if (!isLoggedIn(user)) {
             return;
         }
+        String words[] = message.split(" ",3);
         if (words.length > 2) {
-            String hostmessage = Joiner.on(" ").join(Arrays.copyOfRange(words, 2, words.length), " ");            
+            String hostmessage = words[2];
             if ((words.length > 2) && (Functions.isNumeric(words[1]))) {
+                bot.sendMessageToChannel("Saving host command: " + hostmessage);
                 int slot = Integer.parseInt(words[1]);
                 if (slot > 0 && slot < 11) {
                     try (Connection con = getConnection()) {
@@ -726,7 +728,7 @@ public class MySQL {
 
         }
     }
-    
+
     public static boolean isLoggedIn(User user) {
         if (!bot.isValidUser(user)) {
             bot.sendMessageToChannel("You are not logged in!");
@@ -734,7 +736,7 @@ public class MySQL {
         }
         return true;
     }
-    
+
     /**
      * Shows a server host string saved with the .save command
      *

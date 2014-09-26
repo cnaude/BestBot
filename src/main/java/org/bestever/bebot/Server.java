@@ -17,7 +17,6 @@ package org.bestever.bebot;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ContiguousSet;
 import com.google.common.collect.DiscreteDomain;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Range;
 import java.io.File;
 import java.io.PrintWriter;
@@ -28,9 +27,7 @@ import java.text.Collator;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Formatter;
 import java.util.LinkedList;
-import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import static org.bestever.bebot.Logger.LOGLEVEL_CRITICAL;
@@ -440,8 +437,6 @@ public class Server {
             }
         }
 
-        System.out.println("A1");
-
         // Check if the wads exist
         if (server.wads != null) {
             for (int i = 0; i < server.wads.size(); i++) {
@@ -490,9 +485,7 @@ public class Server {
 
         // Assign and start a new thread
         server.serverprocess = new ServerProcess(server, bot);
-        System.out.println("1");
         server.serverprocess.start();
-        System.out.println("2");
 
         MySQL.logServer(server.servername, server.server_id, username);
     }

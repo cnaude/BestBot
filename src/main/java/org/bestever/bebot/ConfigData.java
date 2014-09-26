@@ -60,6 +60,11 @@ public class ConfigData {
      * The channel it will connect to
      */
     public String ircChannel;
+    
+    /**
+     * IRC channel topic
+     */
+    public String ircTopic;
 
     /**
      * The port to which to connect with IRC
@@ -290,6 +295,7 @@ public class ConfigData {
         // Load the IRC section
         Ini.Section irc = ini.get("irc");
         this.ircChannel = irc.get("channel", "#cnaude");
+        this.ircTopic = irc.get("topic", "");
         this.ircName = irc.get("name", "BestBot");
         this.ircUser = irc.get("user", "BestBot");
         this.ircVersion = irc.get("version", "1.0");
