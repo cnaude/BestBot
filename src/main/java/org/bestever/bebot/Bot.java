@@ -639,7 +639,7 @@ public class Bot extends ListenerAdapter {
                     processOff(userlevel);
                     break;
                 case ".op":
-                    op(user);
+                    op(user, false);
                     break;
                 case ".on":
                     processOn(userlevel);
@@ -705,14 +705,16 @@ public class Bot extends ListenerAdapter {
     /**
      * Op user if level high enough
      */
-    private void op(User user) {
+    private void op(User user, boolean auto) {
         if (user.getChannelsOpIn().contains(getChannel(cfg_data.ircChannel))) {
             return;
         }
         if (AccountType.isAccountTypeOf(MySQL.getLevel(getUserName(user)), AccountType.MODERATOR)) {
             op(cfg_data.ircChannel, user.getNick());
         } else {
-            sendMessageToChannel("Sorry " + user.getNick() + " I can't do that.");
+            if (!auto) {
+                sendMessageToChannel("Sorry " + user.getNick() + " I can't do that.");
+            }
         }
     }
 
@@ -1420,7 +1422,7 @@ public class Bot extends ListenerAdapter {
                     if (MySQL.userLogin(user, keywords[1], keywords[2])) {
                         asyncIRCMessage(nick, "Successfully logged on.");
                         addUserSession(user, keywords[1]);
-                        op(user);
+                        op(user, false);
                     } else {
                         asyncIRCMessage(nick, "Invalid username or password!");
                     }
@@ -1546,7 +1548,7 @@ public class Bot extends ListenerAdapter {
         logMessage(LOGLEVEL_NORMAL, event.getUser().getNick() + " has joined (" + event.getUser().getLogin() + "@" + event.getUser().getHostmask() + ")");
         if (channel.equalsIgnoreCase(cfg_data.ircChannel)) {
             if (!nick.equalsIgnoreCase(bot.getNick())) {
-                op(user);
+                op(user, true);
             }
         } else if (!channel.equalsIgnoreCase(cfg_data.ircChannel)) {
             if (nick.equalsIgnoreCase(bot.getNick())) {
@@ -1562,8 +1564,8 @@ public class Bot extends ListenerAdapter {
      * @param event
      */
     @Override
-    public void onTopic(TopicEvent event) {                
-        String topic = event.getTopic();        
+    public void onTopic(TopicEvent event) {
+        String topic = event.getTopic();
         if (event.getChannel().getName().equalsIgnoreCase(cfg_data.ircChannel)) {
             if (!event.getUser().getNick().equalsIgnoreCase(bot.getNick())) {
                 if (topic != null) {
