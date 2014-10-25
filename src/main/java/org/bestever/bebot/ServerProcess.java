@@ -152,6 +152,9 @@ public class ServerProcess extends Thread {
 
         if (server.gamemode != null) {
             addParameter("+" + server.gamemode, " 1");
+            if (server.gamemode.equals("deathmatch")) {
+                addParameter("+cooperative", " 0");
+            } 
         }
 
         if (server.dmflags > 0) {
