@@ -386,6 +386,29 @@ public class ServerProcess extends Thread {
                     }
                     bot.sendMessageToChannel("[" + server.servername + "] " + strLine);
                 }
+                
+                m = Pattern.compile("(.*) timed out\\.").matcher(strLine);
+                if (m.find()) {
+                    String player = m.group(1);
+                    if (server.playerList.contains(player)) {
+                        server.playerList.remove(player);
+                    }
+                    bot.sendMessageToChannel("[" + server.servername + "] " + strLine);
+                }
+                                
+                m = Pattern.compile("(.*) \\(.*\\) has called a vote.*").matcher(strLine);
+                if (m.find()) {
+                    String player = m.group(1);
+                    if (server.playerList.contains(player)) {
+                        server.playerList.remove(player);
+                    }
+                    bot.sendMessageToChannel("[" + server.servername + "] " + strLine);
+                }
+                
+                m = Pattern.compile("Vote passed!").matcher(strLine);
+                if (m.find()) {
+                    bot.sendMessageToChannel("[" + server.servername + "] " + strLine);
+                }                
 
                 m = Pattern.compile("^(.*) wins!").matcher(strLine);
                 if (m.find()) {

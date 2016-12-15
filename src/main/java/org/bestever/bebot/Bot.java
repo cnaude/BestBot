@@ -20,7 +20,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.lang.management.ManagementFactory;
@@ -40,7 +39,7 @@ import java.util.Timer;
 import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import jline.ConsoleReader;
+import jline.console.ConsoleReader;
 import static org.bestever.bebot.AccountType.ADMIN;
 import static org.bestever.bebot.AccountType.MODERATOR;
 import static org.bestever.bebot.AccountType.REGISTERED;
@@ -1011,6 +1010,8 @@ public class Bot extends ListenerAdapter {
                     sendMessageToChannel("File already exists!: " + fileName);
                     return;
                 }
+                
+                sendMessageToChannel("Downloading: " + URL);
 
                 URL website;
                 try {
@@ -1656,15 +1657,15 @@ public class Bot extends ListenerAdapter {
             return;
         }
         reader.setBellEnabled(false);
-        try {
-            reader.setDebug(new PrintWriter(new FileWriter("writer.debug", true)));
+        /*try {
+            reader.(new PrintWriter(new FileWriter("writer.debug", true)));
 
         } catch (IOException ex) {
             java.util.logging.Logger.getLogger(Bot.class
                     .getName()).log(Level.SEVERE, null, ex);
 
             return;
-        }
+        }*/
 
         String line;
         PrintWriter out = new PrintWriter(System.out);
